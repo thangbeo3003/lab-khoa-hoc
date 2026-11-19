@@ -10,7 +10,8 @@ export function createStage(host) {
   QUALITY.mobile = mobile;
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   const FILM = /[?&]film=1/.test(location.search); // chế độ quay phim: không tự chạy, vẽ dày gấp ba để phóng to vẫn nét
-  renderer.setPixelRatio(FILM ? 3 : Math.min(window.devicePixelRatio || 1, 2)); // vẽ đủ điểm ảnh của màn hình
+  const ratio = () => (FILM ? 3 : Math.min((window.devicePixelRatio || 1) * (window.__uiZoom || 1), 2)); // vẽ đủ điểm ảnh của màn hình, kể cả khi trang được phóng bằng CSS zoom
+  renderer.setPixelRatio(ratio());
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.3;
   renderer.domElement.className = 'lk-canvas';
@@ -131,7 +132,7 @@ export function createStage(host) {
   const frames = [], after = []; let last = performance.now(), running = true;
   function resize() {
     const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return;
-    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    renderer.setPixelRatio(ratio()); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
     if (preset && !userMoved) focus(preset, true);
     if (FILM) { controls.update(); renderer.render(scene, camera); layoutTags(); } // đổi cỡ xoá khung vẽ: chế độ quay phim không có vòng tự vẽ nên vẽ lại ngay
   }

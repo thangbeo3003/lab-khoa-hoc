@@ -14,7 +14,7 @@ const COLORS = ['#6fb3ff', '#f08a24']; // màu cố định của trường hợ
 
 function fitCanvas(cv) {
   const box = cv.getBoundingClientRect(); if (box.width < 4 || box.height < 4) return null;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2), W = box.width, H = box.height;
+  const z = window.__uiZoom || 1, dpr = Math.min((window.devicePixelRatio || 1) * z, 2), W = box.width / z, H = box.height / z; // z: trang đang được phóng bằng CSS zoom
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
   return { g, W, H };

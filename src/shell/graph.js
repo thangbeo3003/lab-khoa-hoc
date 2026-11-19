@@ -1,5 +1,6 @@
 // Đồ thị đường theo thời gian, dùng chung. Một trục, lưới mờ, nhãn trực tiếp, rê chuột xem số.
-const INK = '#16324f', MUTED = '#7c8b9a', GRID = '#e3ebe7', SURFACE = '#ffffff';
+const DS = typeof document !== 'undefined' && document.documentElement.dataset.ui === 'ds';
+const INK = DS ? '#090a2b' : '#16324f', MUTED = DS ? '#666878' : '#7c8b9a', GRID = DS ? '#e7e6ee' : '#e3ebe7', SURFACE = '#ffffff', FONT = DS ? 'Inter, sans-serif' : 'sans-serif';
 const vi = (x, d = 1) => Number(x).toFixed(d).replace('.', ',');
 
 export class RunGraph {
@@ -9,14 +10,14 @@ export class RunGraph {
     this.cv = document.createElement('canvas'); this.tip = document.createElement('div'); this.tip.className = 'lk-tip'; this.tip.hidden = true;
     host.append(this.cv, this.tip);
     this.series = []; this.hoverX = null;
-    this.cv.addEventListener('pointermove', (e) => { const r = this.cv.getBoundingClientRect(); this.hoverX = e.clientX - r.left; this.draw(); });
+    this.cv.addEventListener('pointermove', (e) => { const r = this.cv.getBoundingClientRect(); this.hoverX = (e.clientX - r.left) / (window.__uiZoom || 1); this.draw(); });
     this.cv.addEventListener('pointerleave', () => { this.hoverX = null; this.tip.hidden = true; this.draw(); });
     new ResizeObserver(() => this.draw()).observe(host);
   }
   set(series) { this.series = series; this.draw(); }
   draw() {
     const r = this.host.getBoundingClientRect(); if (!r.width) return;
-    const d = Math.min(window.devicePixelRatio || 1, 2), W = r.width, H = Math.max(150, Math.min(210, W * 0.56));
+    const z = window.__uiZoom || 1, d = Math.min((window.devicePixelRatio || 1) * z, 2), W = r.width / z, H = Math.max(150, Math.min(210, W * 0.56)); // z: trang đang được phóng bằng CSS zoom
     const cv = this.cv, g = cv.getContext('2d');
     if (cv.width !== Math.round(W * d) || cv.height !== Math.round(H * d)) { cv.width = Math.round(W * d); cv.height = Math.round(H * d); cv.style.height = H + 'px'; }
     g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, W, H);
@@ -24,7 +25,7 @@ export class RunGraph {
     let tMax = 20; for (const s of this.series) if (s.points.length) tMax = Math.max(tMax, s.points[s.points.length - 1][0]);
     const stepT = tMax <= 25 ? 5 : tMax <= 60 ? 10 : tMax <= 150 ? 30 : 60; tMax = Math.ceil((tMax * 1.04) / stepT) * stepT;
     const X = (t) => L + (t / tMax) * pw, Y = (v) => T + ph - (v / yMax) * ph;
-    g.font = '11px sans-serif'; g.textBaseline = 'middle';
+    g.font = `11px ${FONT}`; g.textBaseline = 'middle';
     for (let v = 0; v <= yMax; v += 20) { g.strokeStyle = GRID; g.lineWidth = 1; g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(W - Rm, Y(v)); g.stroke(); g.fillStyle = MUTED; g.textAlign = 'right'; g.fillText(String(v), L - 6, Y(v)); }
     g.textAlign = 'center'; g.textBaseline = 'top';
     for (let t = 0; t <= tMax; t += stepT) g.fillText(String(t), X(t), T + ph + 6);
@@ -44,7 +45,7 @@ export class RunGraph {
       if (s.label && !s.thin) { const [t, v] = p[p.length - 1]; labels.push({ x: X(t), y: Y(v), text: s.label }); }
     }
     // Nhãn trực tiếp đặt ở cuối mỗi đường, so le xuống dưới để không chồng nhau.
-    labels.sort((a, b) => a.x - b.x); g.font = '600 11px sans-serif'; g.textBaseline = 'middle';
+    labels.sort((a, b) => a.x - b.x); g.font = `600 11px ${FONT}`; g.textBaseline = 'middle';
     labels.forEach((l, i) => {
       const w = g.measureText(l.text).width, yy = Math.min(l.y + 15 + i * 14, T + ph - 8);
       let xx = l.x + 7; if (xx + w > W - 2) xx = l.x - 7 - w;

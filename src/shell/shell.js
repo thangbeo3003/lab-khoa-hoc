@@ -1,5 +1,7 @@
 // Vỏ bài học dùng chung: tiêu đề, chuỗi nhân quả, thanh bước, thẻ bước, chân trang, lưu tiến độ.
 // Bài học cắm vào qua shell.attach(lesson) với: enter(i), renderPanel(i, host), isDone(i).
+// Trang có <html data-ui="ds">: thêm vỏ app theo DESIGN_SYSTEM.md (sidebar, topbar có breadcrumb); kiểu dáng ở ds.css + shell_ds.css. Logic bước, lưu tiến độ, phím tắt không đổi.
+import { icon } from '../free/icons.js';
 
 export function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
@@ -53,13 +55,27 @@ export function createShell(root, { meta, steps }) {
   };
   els.stage.append(els.hud, els.overlay);
   const chain = h('div', { class: 'lk-chain' }, meta.chain.map((c, i) => [i > 0 && h('span', { class: 'lk-arrow', text: '→' }), h('span', { class: 'lk-link' }, h('b', { text: c[0] }), ' ', c[1])]));
-  root.replaceChildren(
-    h('header', { class: 'lk-top' },
-      h('div', { class: 'lk-titlebar' }, h('span', { class: 'lk-grade', text: meta.grade }), h('h1', { class: 'lk-title', text: meta.title }), h('span', { class: 'lk-eq', text: meta.equation }), els.score),
-      chain, els.rail),
-    h('main', { class: 'lk-main' }, els.stage, els.card, els.panel),
-    h('footer', { class: 'lk-foot' }, h('div', { class: 'lk-footbar' }, els.prev, els.count, els.next), els.note),
-  );
+  const DS = document.documentElement.dataset.ui === 'ds';
+  const top = (withScore) => h('header', { class: 'lk-top' },
+    h('div', { class: 'lk-titlebar' }, h('span', { class: 'lk-grade', text: meta.grade }), h('h1', { class: 'lk-title', text: meta.title }), h('span', { class: 'lk-eq', text: meta.equation }), withScore && els.score),
+    chain, els.rail);
+  const body = [h('main', { class: 'lk-main' }, els.stage, els.card, els.panel), h('footer', { class: 'lk-foot' }, h('div', { class: 'lk-footbar' }, els.prev, els.count, els.next), els.note)];
+  if (!DS) root.replaceChildren(top(true), ...body);
+  else { root.classList.add('ds'); const keycap = (ic) => h('span', { class: 'nav-icon' }, icon(ic));
+    // Giao diện tự phóng theo cửa sổ như trang thực hành (bề ngang thiết kế 1920 px). window.__uiZoom để cảnh 3D và các canvas vẽ đủ nét và đo đúng kích thước.
+    const fit = () => { const k = Math.max(1, innerWidth / 1920); window.__uiZoom = k; root.style.zoom = k; root.style.width = `calc(100vw / ${k})`; root.style.height = `calc(100dvh / ${k})`; }; addEventListener('resize', fit); fit();
+    // "Khám phá" chưa có trang mở được nên menu mới có hai mục đang chạy thật: bài học mẫu này và bàn thực hành
+    root.replaceChildren(
+      h('aside', { class: 'app-sidebar', 'aria-label': 'Lab Khoa Học' },
+        h('div', { class: 'brand-row' }, h('div', { class: 'brand' }, h('span', { class: 'brand-mark' }, icon('flask-conical')), h('span', { text: 'Lab Khoa Học' })), h('button', { class: 'quiet icon-only menu-close', type: 'button', 'aria-label': 'Đóng menu', onclick: () => root.classList.remove('menu-open') }, icon('x'))),
+        h('nav', { class: 'app-nav', 'aria-label': 'Điều hướng chính' }, h('div', { class: 'nav-group', role: 'group', 'aria-label': 'Phòng lab' }, h('p', { class: 'nav-caption', 'aria-hidden': 'true', text: 'Phòng lab' }),
+          h('button', { type: 'button', 'aria-current': 'page' }, keycap('graduation-cap'), h('span', { text: 'Bài học mẫu' })),
+          h('button', { type: 'button', onclick: () => { location.href = './thuc_hanh.html'; } }, keycap('flask-conical'), h('span', { text: 'Bàn thực hành' }))))),
+      h('button', { class: 'menu-backdrop', type: 'button', 'aria-label': 'Đóng menu', onclick: () => root.classList.remove('menu-open') }),
+      h('div', { class: 'app-main' },
+        h('header', { class: 'app-header' }, h('button', { class: 'quiet icon-only menu-toggle', type: 'button', 'aria-label': 'Mở menu', onclick: () => root.classList.add('menu-open') }, icon('menu')),
+          h('div', { class: 'breadcrumb' }, h('span', { text: 'Lab Khoa Học' }), icon('chevron-right'), h('span', { text: 'Bài học' }), icon('chevron-right'), h('strong', { text: meta.grade })), h('div', { class: 'heading-actions' }, els.score)),
+        top(false), ...body)); }
   steps.forEach((s, i) => els.rail.append(h('button', { type: 'button', 'data-i': i, title: s.short, onclick: () => go(i) }, h('i', { text: String(i + 1) }), h('span', { text: s.short }))));
 
   function renderCard() {

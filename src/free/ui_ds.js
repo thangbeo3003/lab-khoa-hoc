@@ -16,7 +16,7 @@ export function mountDS(c) {
   put($('sidebar'),
     el('div', { class: 'brand-row' }, el('div', { class: 'brand' }, el('span', { class: 'brand-mark' }, icon('flask-conical')), el('span', {}, 'Lab Khoa Học')), btn('quiet icon-only menu-close', 'x', null, { 'aria-label': 'Đóng menu', onclick: () => app.classList.remove('menu-open') })),
     el('nav', { class: 'app-nav', 'aria-label': 'Điều hướng chính' },
-      el('div', { class: 'nav-group', role: 'group', 'aria-label': 'Phòng lab' }, el('p', { class: 'nav-caption', 'aria-hidden': 'true' }, 'Phòng lab'), el('button', { type: 'button', 'aria-current': 'page' }, keycap('flask-conical'), el('span', {}, 'Bàn thực hành'))),
+      el('div', { class: 'nav-group', role: 'group', 'aria-label': 'Phòng lab' }, el('p', { class: 'nav-caption', 'aria-hidden': 'true' }, 'Phòng lab'), el('button', { type: 'button', onclick: () => { location.href = './index.html'; } }, keycap('graduation-cap'), el('span', {}, 'Bài học mẫu')), el('button', { type: 'button', 'aria-current': 'page' }, keycap('flask-conical'), el('span', {}, 'Bàn thực hành'))),
       el('div', { class: 'nav-group', role: 'group', 'aria-label': 'Ghi chép' }, el('p', { class: 'nav-caption', 'aria-hidden': 'true' }, 'Ghi chép'), bookBtn)));
   $('menuBackdrop').addEventListener('click', () => app.classList.remove('menu-open'));
   const showChem = btn('secondary', 'beaker', 'Hoá chất', { 'aria-controls': 'cabinet', onclick: () => { if (wide.matches) S.dock = true; else S.cabOpen = !S.cabOpen; cabState(); } });
