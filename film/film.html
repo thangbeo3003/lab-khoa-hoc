@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Lab Khoa Học · video giới thiệu</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@600;700;800&display=swap">
+<style>
+/* Video giới thiệu 16:9, 1920×1080, 30 fps. Quay chính bài mẫu (iframe ?film=1, chạy theo đồng hồ của video).
+   LOOK: phòng lab S2 của sản phẩm; chữ phủ Be Vietnam Pro 800/700; trắng trên nền xanh than #11161b;
+   màu nhấn #2f6fd0 (phòng lab) và #f08a24 (màn đời sống); máy quay mượt 30 fps, đẩy vào giữa hai thao tác. */
+:root { --ink: #ffffff; --bg: #11161b; --blue: #2f6fd0; --orange: #f08a24; --f: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: var(--f); }
+#cam { position: absolute; left: 0; top: 0; width: 1100px; height: 720px; transform-origin: 0 0; will-change: transform; }
+#app { width: 1100px; height: 720px; border: 0; display: block; background: #f1f6f3; }
+#cam.is-card #app { border-radius: 14px; }
+.ui { position: absolute; pointer-events: none; }
+/* chữ mở đầu */
+#hook { left: 0; top: 0; width: 1020px; height: 1080px; background: linear-gradient(90deg, rgba(10,14,18,0.92) 0%, rgba(10,14,18,0.78) 62%, rgba(10,14,18,0) 100%); }
+#hook .in { position: absolute; left: 96px; top: 300px; width: 820px; display: grid; gap: 26px; }
+#hook .kicker { font-size: 30px; font-weight: 700; color: #9cc2ff; letter-spacing: 0.02em; }
+#hook h1 { margin: 0; font-size: 84px; line-height: 1.08; font-weight: 800; color: var(--ink); letter-spacing: -0.01em; }
+#hook h1 em { font-style: normal; color: #ffb066; }
+/* nhãn màn */
+#chap { left: 56px; top: 44px; display: flex; align-items: center; gap: 14px; background: rgba(17,22,27,0.9); color: #fff; border-radius: 999px; padding: 12px 26px 12px 14px; font-size: 30px; font-weight: 700; box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+#chap i { font-style: normal; font-size: 24px; background: var(--blue); border-radius: 999px; padding: 4px 16px; }
+#chap.is-life i { background: var(--orange); }
+/* phụ đề */
+#capband { left: 0; right: 0; top: 930px; height: 110px; display: flex; justify-content: center; align-items: center; }
+.cap { background: rgba(17,22,27,0.9); color: #fff; font-size: 50px; font-weight: 700; padding: 14px 38px; border-radius: 18px; white-space: nowrap; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+/* chạm */
+.tap { position: absolute; width: 76px; height: 76px; margin: -38px 0 0 -38px; border-radius: 50%; border: 6px solid #ffffff; box-shadow: 0 0 0 4px rgba(47,111,208,0.55); }
+.tap::after { content: ""; position: absolute; left: 50%; top: 50%; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; background: #ffffff; }
+/* khung kết */
+#end { left: 1238px; top: 0; width: 620px; height: 1080px; display: grid; align-content: center; gap: 26px; color: #fff; }
+#end .name { font-size: 84px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+#end .l1 { font-size: 36px; font-weight: 700; color: #cfe0f5; line-height: 1.3; }
+#end .l2 { font-size: 40px; font-weight: 800; color: #ffb066; line-height: 1.25; }
+#end .l3 { font-size: 26px; font-weight: 600; color: #8ea3b6; }
+#end .bar { width: 120px; height: 8px; border-radius: 4px; background: var(--blue); }
+</style>
+</head>
+<body>
+<div id="cam"><iframe id="app" src="../index.html?film=1" title="Bài mẫu"></iframe></div>
+<div id="hook" class="ui"><div class="in"><div class="kicker">Lab Khoa Học, Hoá 10</div><h1>Mỗi tiết Hoá là một<br>buổi thí nghiệm<br><em>tự tay làm</em></h1></div></div>
+<div id="chap" class="ui"><i></i><span></span></div>
+<div id="capband" class="ui"><div class="cap"></div></div>
+<div id="taps" class="ui" style="inset:0"></div>
+<div id="end" class="ui"><div class="bar"></div><div class="name">Lab Khoa Học</div><div class="l1">Bài mẫu: Tốc độ phản ứng, Hoá 10</div><div class="l2">Dựng một lần, dùng cho cả trăm bài</div><div class="l3">Bản thử, chưa có giáo viên duyệt</div></div>
+<script>
+const FW = 1920, FH = 1080, IW = 1100, IH = 720, AREA = { x: 0, y: 112, w: 1920, h: 808 }; // vùng đặt nội dung: chừa nhãn màn ở trên, dải phụ đề ở dưới
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const io = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2); // vào ra êm, cho máy quay
+const out = (k) => 1 - Math.pow(1 - k, 3); // đến: đuôi dài
+const inn = (k) => k * k * k; // đi: nhanh dần
+let W, D, L, B; // cửa sổ, tài liệu, bài, bàn thí nghiệm trong iframe
+let now = 0, evI = 0;
+const cache = {};
+
+// ---------- mốc thời gian (giây), canh theo phách mạnh của nhạc ----------
+const DB = [0.95, 3.32, 5.78, 8.15, 10.61, 13.07, 15.42, 17.88, 20.25, 22.68, 25.14, 27.56, 30.04, 32.46, 34.85, 37.27, 39.7];
+const TL = { m1: 3.32, guess: 5.78, m2: 8.15, graph: 15.42, m3: 20.25, quiz: 22.68, m4: 25.14, wide: 34.85, end: 37.27, dur: 42 };
+
+const CHAPS = [
+  { t: TL.m1, n: 'Màn 1', s: 'Mở vấn đề' }, { t: TL.m2, n: 'Màn 2', s: 'Phòng thí nghiệm' },
+  { t: TL.m3, n: 'Màn 3', s: 'Rút ra' }, { t: TL.m4, n: 'Màn 4', s: 'Đời sống', life: true },
+];
+window.CAPTIONS = [
+  { t0: 3.55, t1: 5.6, text: 'Mở bằng một câu hỏi' },
+  { t0: 6.0, t1: 8.0, text: 'Đoán trước khi làm' },
+  { t0: 8.5, t1: 10.6, text: 'Tự tay rót acid' },
+  { t0: 12.45, t1: 14.6, text: 'Tự thả đá vôi' },
+  { t0: 15.65, t1: 18.0, text: 'Số đo chạy theo phản ứng' },
+  { t0: 20.45, t1: 22.5, text: 'Nhìn tới từng hạt' },
+  { t0: 22.9, t1: 25.0, text: 'Kiểm tra theo đề thi' },
+  { t0: 25.4, t1: 27.5, text: 'Rồi gặp lại ngoài đời' },
+  { t0: 32.5, t1: 34.85, text: 'Bẻ vụn tan nhanh gấp 3' },
+  { t0: 35.05, t1: 37.15, text: 'Một phòng lab cho mọi bài' },
+];
+window.CUTS = [TL.m1, TL.m2, TL.m3, TL.quiz, TL.m4, TL.wide, TL.end];
+window.CAPTION_EL = '.cap';
+
+// ---------- việc làm trong bài, theo thời gian ----------
+const tag = (id) => `[data-tag="${id}"]`;
+const btn = (text, scope = '.lk-panel') => () => [...D.querySelectorAll(scope + ' button')].find((b) => b.textContent.includes(text) && !b.disabled);
+const EVENTS = [
+  { t: TL.m1, fn: () => { L.shell.go(0); } },
+  { t: TL.guess, fn: () => { L.shell.go(2); } },
+  { t: 6.55, tap: btn('nhanh hơn') },
+  { t: 7.3, tap: btn('bằng nhau') },
+  { t: TL.m2, fn: () => { L.shell.go(3); click(btn('Bột mịn')()); } },
+  { t: 8.75, tap: () => D.querySelector(tag('acid')) },
+  { t: 12.5, tap: () => D.querySelector(tag('sample')) },
+  { t: TL.graph - 0.05, fn: () => { const p = D.querySelector('.lk-panel'); p.scrollTop = p.scrollHeight; } },
+  { t: TL.m3, fn: () => { L.shell.go(7); click(btn('Đặc')()); click(btn('16 mảnh')()); } },
+  { t: TL.quiz, fn: () => { L.shell.go(9); } },
+  { t: 23.75, tap: btn('tăng diện tích') },
+  { t: TL.m4, fn: () => { W.__FILM_SPEED = 4; L.shell.go(10); } },
+  { t: 25.55, fn: () => { click(btn('Thả viên sủi')()); } },
+  { t: TL.wide, fn: () => { L.shell.go(1); B.setTags(null); } },
+];
+window.EV = [
+  ...EVENTS.filter((e) => e.tap).map((e) => ({ t: e.t, type: 'pop', gain: -4 })),
+  { t: 25.55 + 0.6, type: 'pop', gain: -6 },          // viên sủi chạm mặt nước
+  { t: 25.55 + 1 + 2, type: 'ding', gain: -3 },       // cốc viên vụn tan hết
+];
+function click(el) { if (el) el.click(); }
+
+// ---------- máy quay: mỗi mốc là một khung cần lấp đầy, tính từ vị trí phần tử trong bài ----------
+const rect = (sel) => { const r = D.querySelector(sel).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
+const sub = (b, fx, fy, fw, fh) => ({ x: b.x + b.w * fx, y: b.y + b.h * fy, w: b.w * fw, h: b.h * fh });
+const FULL = () => ({ x: 0, y: 0, w: IW, h: IH });
+const CAM = [
+  { t: 0, dur: 0.01, box: () => rect('.lk-stage') },
+  { t: 0.05, dur: 3.2, box: () => sub(rect('.lk-stage'), 0.08, 0.1, 0.84, 0.84), ease: io },           // đẩy vào chậm khi mở
+  { t: TL.m1, dur: 0.75, box: () => rect('.lk-card'), ease: io },                                      // vào thẻ câu hỏi
+  { t: TL.guess, dur: 0.32, box: () => rect('.lk-panel .lk-box'), ease: io, whip: true },               // lia nhanh sang bảng đoán
+  { t: TL.m2, dur: 0.38, box: () => rect('.lk-stage'), ease: io, whip: true },                          // lia về bàn thí nghiệm
+  { t: 12.2, dur: 0.9, box: () => sub(rect('.lk-stage'), 0.06, 0.12, 0.7, 0.86), ease: io },           // đẩy vào bình trước khi thả
+  { t: TL.graph, dur: 0.4, box: () => { const b = [...D.querySelectorAll('.lk-panel .lk-box')].pop(); const r = b.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; }, ease: io, whip: true }, // lia sang đồ thị
+  { t: TL.m3, dur: 0.6, box: () => rect('.lk-stage'), ease: io },
+  { t: TL.quiz, dur: 0.38, box: () => rect('.lk-panel .lk-box'), ease: io, whip: true },
+  { t: TL.m4, dur: 0.7, box: () => rect('.lk-stage'), ease: io },
+  { t: TL.wide, dur: 0.6, box: () => rect('.lk-stage'), ease: io },
+];
+function boxAt(i) { if (!cache[i]) cache[i] = CAM[i].box(); return cache[i]; }
+function camBox(t) {
+  let i = 0; for (let k = 0; k < CAM.length; k++) if (CAM[k].t <= t) i = k;
+  const k = CAM[i], b1 = boxAt(i), b0 = i ? camBoxEnd(i - 1) : b1;
+  const p = clamp((t - k.t) / k.dur, 0, 1), e = (k.ease || io)(p);
+  const lw = Math.log(b0.w) + (Math.log(b1.w) - Math.log(b0.w)) * e, lh = Math.log(b0.h) + (Math.log(b1.h) - Math.log(b0.h)) * e;
+  const cx = b0.x + b0.w / 2 + (b1.x + b1.w / 2 - b0.x - b0.w / 2) * e, cy = b0.y + b0.h / 2 + (b1.y + b1.h / 2 - b0.y - b0.h / 2) * e;
+  const drift = 1 + Math.min(0.09, 0.012 * Math.max(0, t - k.t - k.dur)); // trôi nhẹ khi giữ khung, không để hình đứng yên
+  const w = Math.exp(lw) / drift, h = Math.exp(lh) / drift;
+  return { x: cx - w / 2, y: cy - h / 2, w, h };
+}
+function camBoxEnd(i) { return boxAt(i); }
+function toT(b) {
+  let s = Math.min(AREA.w / b.w, AREA.h / b.h); s = Math.max(s, FW / IW);
+  let tx = AREA.x + AREA.w / 2 - s * (b.x + b.w / 2), ty = AREA.y + AREA.h / 2 - s * (b.y + b.h / 2);
+  tx = clamp(tx, FW - s * IW, 0); ty = clamp(ty, FH - s * IH, 0);
+  return { s, tx, ty };
+}
+// khung kết: cả bài thu nhỏ thành một tấm thẻ bên trái
+const CARD = { s: 0.98, tx: 90, ty: (FH - IH * 0.98) / 2 };
+function camT(t) {
+  const a = toT(camBox(t));
+  if (t < TL.end) return a;
+  const e = io(clamp((t - TL.end) / 0.85, 0, 1)), z = Math.exp(Math.log(a.s) + (Math.log(CARD.s) - Math.log(a.s)) * e);
+  return { s: z, tx: a.tx + (CARD.tx - a.tx) * e, ty: a.ty + (CARD.ty - a.ty) * e };
+}
+
+// ---------- vòng chính ----------
+async function build() {
+  const fr = document.getElementById('app');
+  await new Promise((r) => { if (fr.contentWindow && fr.contentWindow.__lab) r(); else fr.addEventListener('load', () => r(), { once: true }); });
+  for (let i = 0; i < 200 && !(fr.contentWindow.__lab); i++) await new Promise((r) => setTimeout(r, 50));
+  W = fr.contentWindow; D = W.document; L = W.__lab; B = L.lesson.bench;
+  try { W.localStorage.clear(); } catch (e) { /* bỏ qua */ }
+  await D.fonts.ready; await document.fonts.ready;
+  await new Promise((r) => setTimeout(r, 3500)); // chờ ảnh tường và ảnh toàn cảnh tải xong
+  // trạng thái khung 0: phản ứng bột mịn đang chạy, bọt và pit-tông đã chuyển động
+  L.shell.go(3); click(btn('Bột mịn')());
+  const st = B.stage; const adv = (sec) => { for (let i = 0; i < Math.round(sec * 30); i++) st.advance(1 / 30); };
+  adv(0.4); click(D.querySelector(tag('acid'))); adv(4.2); click(D.querySelector(tag('sample'))); adv(3.4);
+  B.setTags(null);
+  st.focus({ target: [-0.75, 1.75, 0], w: 4.9, h: 3.5, el: 7, az: 12 }, true); st.advance(0);
+  now = 0; evI = 0; render(0);
+}
+
+function fireUntil(t) {
+  while (evI < EVENTS.length && EVENTS[evI].t <= t + 1e-6) {
+    const e = EVENTS[evI++];
+    if (e.fn) e.fn();
+    if (e.tap) { const el = e.tap(); if (el) { const r = el.getBoundingClientRect(); TAPS.push({ t: e.t, x: r.left + r.width / 2, y: r.top + r.height / 2 }); el.click(); } }
+  }
+}
+const TAPS = [];
+function advanceTo(t) {
+  if (t <= now) return; // chỉ chạy tiến
+  const st = B.stage;
+  while (now < t - 1e-6) {
+    const nextEv = evI < EVENTS.length ? EVENTS[evI].t : Infinity;
+    const nextCam = (CAM.find((k, i) => !cache[i] && k.t > now) || { t: Infinity }).t;
+    const next = Math.min(t, nextEv, nextCam, now + 1 / 30);
+    const dt = next - now; now = next;
+    if (dt > 0) st.advance(dt);
+    fireUntil(now);
+    CAM.forEach((k, i) => { if (k.t <= now + 1e-6 && !cache[i]) boxAt(i); }); // chốt khung máy quay đúng lúc, kể cả khi nhảy cóc
+  }
+  if (t >= TL.wide) { // cảnh cuối trong phòng lab: máy quay 3D đi một vòng chậm quanh bàn
+    const k = clamp((t - TL.wide) / (TL.end + 0.9 - TL.wide), 0, 1);
+    st.focus({ target: [0.6, 1.4, 0], w: 12.5 - 2.5 * io(k), h: 6.4, el: 15 - 4 * io(k), az: 34 - 58 * io(k) }, true); st.advance(0);
+  }
+}
+
+function render(t) {
+  if (!B) return;
+  advanceTo(t);
+  // bài có scrollIntoView (thanh bước) kéo cả trang quay phim cuộn theo: luôn đưa về gốc
+  window.scrollTo(0, 0); document.documentElement.scrollLeft = 0; document.body.scrollLeft = 0; D.scrollingElement.scrollTo(0, 0);
+  // máy quay
+  const T = camT(t), T0 = camT(Math.max(0, t - 1 / 30));
+  const cam = document.getElementById('cam');
+  cam.style.transform = `translate(${T.tx}px, ${T.ty}px) scale(${T.s})`;
+  // mờ chuyển động chỉ cho cú lia nhanh, theo tốc độ dịch chuyển của khung
+  let wk = null; CAM.forEach((k) => { if (k.whip && t >= k.t && t < k.t + k.dur) wk = k; });
+  const v = Math.hypot(T.tx - T0.tx, T.ty - T0.ty);
+  cam.style.filter = wk && v > 40 ? `blur(${Math.min(5, (v - 40) / 30).toFixed(2)}px)` : 'none';
+  cam.classList.toggle('is-card', t >= TL.end);
+  // chữ mở đầu: đứng yên từ khung 0, ra nhanh dần trước mốc màn 1
+  const hk = document.getElementById('hook'), ho = clamp((t - (TL.m1 - 0.32)) / 0.32, 0, 1);
+  hk.style.opacity = String(1 - inn(ho)); hk.style.transform = `translateX(${-120 * inn(ho)}px)`; hk.style.display = ho >= 1 ? 'none' : '';
+  // nhãn màn
+  const ch = document.getElementById('chap'); let c = null; CHAPS.forEach((x) => { if (x.t <= t) c = x; });
+  if (!c || t >= TL.wide) { ch.style.display = 'none'; } else {
+    ch.style.display = ''; ch.querySelector('i').textContent = c.n; ch.querySelector('span').textContent = c.s; ch.classList.toggle('is-life', !!c.life);
+    const p = clamp((t - c.t) / 0.4, 0, 1); ch.style.opacity = String(out(p)); ch.style.transform = `translateY(${-18 * (1 - out(p))}px)`;
+  }
+  // phụ đề: hiện 0,18 s rồi đứng yên, ra 0,12 s
+  const cap = document.querySelector('.cap'), cp = window.CAPTIONS.find((x) => t >= x.t0 && t < x.t1);
+  if (!cp) cap.style.display = 'none'; else {
+    cap.style.display = ''; cap.textContent = cp.text;
+    const a = clamp((t - cp.t0) / 0.18, 0, 1), b = clamp((cp.t1 - t) / 0.12, 0, 1);
+    cap.style.opacity = String(Math.min(out(a), b)); cap.style.transform = `translateY(${14 * (1 - out(a))}px)`;
+  }
+  // dấu chạm
+  const tp = document.getElementById('taps'); tp.replaceChildren();
+  TAPS.forEach((x) => {
+    const d = t - x.t; if (d < -0.25 || d > 0.6) return;
+    const el = document.createElement('div'); el.className = 'tap';
+    const k = d < 0 ? out(clamp((d + 0.25) / 0.25, 0, 1)) : 1, f = d > 0 ? clamp(d / 0.6, 0, 1) : 0;
+    el.style.left = `${T.tx + T.s * x.x}px`; el.style.top = `${T.ty + T.s * x.y}px`;
+    el.style.opacity = String(k * (1 - inn(f))); el.style.transform = `scale(${(0.7 + 0.3 * k) * (d > 0 ? 1 - 0.18 * Math.sin(Math.min(1, d / 0.18) * Math.PI) : 1)})`;
+    tp.appendChild(el);
+  });
+  // khung kết: chữ vào lần lượt
+  const end = document.getElementById('end');
+  if (t < TL.end + 0.3) end.style.display = 'none'; else {
+    end.style.display = '';
+    [...end.children].forEach((el, i) => { const p = clamp((t - TL.end - 0.35 - i * 0.16) / 0.5, 0, 1); el.style.opacity = String(out(p)); el.style.transform = `translateX(${36 * (1 - out(p))}px)`; });
+  }
+}
+window.build = build; window.render = render;
+</script>
+</body>
+</html>

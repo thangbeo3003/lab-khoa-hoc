@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="vi" data-bench="2d">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phòng thực hành · Lab Khoa Học</title>
+<link rel="stylesheet" href="./src/free/free.css">
+<script type="importmap">
+  { "imports": { "three": "./vendor/three/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<div class="lb" id="app">
+  <header class="lb-top">
+    <div class="lb-logo"><i>L</i>Lab Khoa Học</div>
+    <nav class="lb-tabs"><span class="on">Tự do</span><span class="soon" title="Làm thí nghiệm theo từng bước có sẵn. Chưa làm.">Thí nghiệm kinh điển</span><span class="soon" title="Đố nhận biết các lọ không dán nhãn. Chưa làm.">Lọ mất nhãn</span></nav>
+    <button id="bBook">Sổ thí nghiệm</button>
+  </header>
+  <div class="lb-body">
+    <aside class="lb-cab" id="cabDock"></aside>
+    <main class="lb-main">
+      <div class="lb-bar">
+        <div class="lb-title"><h1>Bàn thí nghiệm</h1><p id="hint"></p></div>
+        <div class="lb-pick" id="pickbar"></div>
+      </div>
+      <div class="lb-split" id="split">
+            <div class="lb-stagewrap"><div class="lb-stage" id="stage"></div></div>
+            <section class="lb-p3" id="proc"></section>
+          </div>
+      <div class="lb-notes" id="notes"></div>
+          <div class="lb-result" id="result"></div>
+      <div class="lb-drawer" id="drawer" hidden></div>
+      <div class="lb-foot">
+        <button id="bChem">Hoá chất</button><button id="bTools">Dụng cụ</button>
+        <span class="sp"></span>
+        <button class="quiet" id="bSound">Âm thanh: bật</button><button class="quiet" id="bClear">Dọn bàn</button>
+      </div>
+    </main>
+    <aside class="lb-book" id="book" hidden></aside>
+  </div>
+  <div class="lb-toast" id="toast"></div>
+</div>
+<script type="module" src="./src/free/lab.js"></script>
+</body>
+</html>

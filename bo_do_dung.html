@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bộ đồ dùng · luồng 2</title>
+<script type="importmap">
+  { "imports": { "three": "./vendor/three/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+<style>
+:root { --ink:#16324f; --ink2:#52657a; --muted:#7c8b9a; --bg:#f2f5f8; --card:#fff; --line:#dbe3ea; --pri:#1f6feb; --pri-soft:#e8f0fe; --good:#1e9e6a; --good-soft:#e3f5ec; --warn:#b26a00; --warn-soft:#fff3dc;
+  --font:"Be Vietnam Pro",-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 var(--font); }
+.wrap { max-width:1280px; margin:0 auto; padding:18px 16px 48px; }
+h1 { font-size:24px; margin:0 0 4px; }
+header p { margin:0; color:var(--ink2); }
+.card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; }
+.main { display:grid; gap:14px; margin-top:14px; }
+@media (min-width:980px) { .main { grid-template-columns:minmax(0,1fr) minmax(0,1.05fr); align-items:start; } .view { position:sticky; top:12px; } }
+.stage { position:relative; width:100%; aspect-ratio:4/3; border-radius:12px; overflow:hidden; background:#e8ecf0; }
+.stage canvas { width:100%; height:100%; display:block; touch-action:none; }
+.hint { position:absolute; left:10px; bottom:8px; font-size:12.5px; color:var(--ink2); background:rgba(255,255,255,.8); padding:2px 8px; border-radius:8px; pointer-events:none; }
+.name { font-size:20px; font-weight:700; margin:12px 0 2px; }
+.tag { display:inline-block; padding:1px 9px; border-radius:99px; font-size:12px; font-weight:600; margin-left:8px; vertical-align:3px; }
+.tag.new { background:var(--pri-soft); color:var(--pri); } .tag.old { background:#eef1f4; color:var(--ink2); }
+.meta { color:var(--ink2); margin:0 0 4px; } .meta b { color:var(--ink); font-weight:600; }
+.row { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center; }
+button { font:inherit; cursor:pointer; border-radius:10px; border:1px solid var(--line); background:#fff; color:var(--ink); padding:7px 14px; }
+button:hover { border-color:var(--pri); }
+button.ok.on { background:var(--good); border-color:var(--good); color:#fff; font-weight:600; }
+button.fix.on { background:var(--warn); border-color:var(--warn); color:#fff; font-weight:600; }
+input.note { flex:1 1 220px; font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:10px; min-width:0; }
+.sec { font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:14px 0 8px; font-weight:700; }
+.sec:first-child { margin-top:0; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:8px; }
+.it { border:1px solid var(--line); border-radius:12px; background:#fff; padding:0 0 6px; cursor:pointer; position:relative; overflow:hidden; text-align:center; }
+.it img, .it .ph { width:100%; aspect-ratio:1; display:block; background:#e8ecf0; }
+.it span { display:block; font-size:12.5px; line-height:1.3; padding:5px 4px 0; }
+.it.cur { border-color:var(--pri); box-shadow:0 0 0 2px var(--pri); }
+.it i { position:absolute; top:6px; right:6px; width:12px; height:12px; border-radius:50%; border:2px solid #fff; display:none; }
+.it.s-ok i { display:block; background:var(--good); } .it.s-fix i { display:block; background:var(--warn); }
+.sum { margin-top:12px; padding:10px 12px; border-radius:10px; background:var(--pri-soft); display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bộ đồ dùng của phòng thực hành</h1>
+    <p>Mọi món đều dựng bằng mã theo kích thước thật, hình nhỏ chụp từ chính mô hình 3D. Bấm một món để xoay xem, rồi đánh dấu Đạt hoặc Cần sửa.</p>
+  </header>
+  <div class="main">
+    <div class="card view">
+      <div class="stage" id="stage"><div class="hint">Kéo để xoay 360° · cuộn để phóng</div></div>
+      <div class="name" id="name"></div>
+      <p class="meta" id="size"></p>
+      <p class="meta" id="use"></p>
+      <div class="row">
+        <button class="ok" id="bOk">Đạt</button><button class="fix" id="bFix">Cần sửa</button>
+        <input class="note" id="note" placeholder="Ghi chú cho món này (không bắt buộc)">
+      </div>
+      <div class="sum"><span id="sum"></span><button id="copy">Chép danh sách cần sửa</button></div>
+    </div>
+    <div class="card" id="list"></div>
+  </div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+import { PAL, canvasTexture, FONT } from './src/kit/materials.js';
+import { makeTestTube, makeRack, makeFlask, makeBottle, makeWatchGlass, makeHotplate } from './src/kit/labware.js';
+import { texMat, settled, makeBeaker, makeDropper, makeDropperBottle, makeGlassRod, makeTubeHolder, makeSpatula, makeAlcoholLamp, makeWashBottle, makeLitmus, makeChemSolid, makeChemContainer, makeSchoolRack } from './src/kit/labware2.js';
+import { CHEMS, BY_ID } from './src/chem/data.js';
+import { pretty } from './src/chem/formula.js';
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, ...kids) => { const n = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k === 'class') n.className = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v); } n.append(...kids.filter((x) => x != null)); return n; };
+const lay = (o, x = 0, y = 0, z = 0, rot = null) => { const g = new THREE.Group(); o.position.set(x, y, z); if (rot) o.rotation.set(...rot); g.add(o); return g; };
+
+// ---------- danh sách món ----------
+const SOLID_LOOK = { Na: 'mẩu cắt nhỏ, bảo quản trong dầu hoả', Mg: 'dây dẹt (băng magnesium)', Al: 'lá mỏng', Zn: 'hạt', Fe: 'đinh sắt nhỏ', Cu: 'dây quấn lò xo', Ag: 'dây', CaCO3: 'đá vôi đập vụn', CaO: 'cục vôi sống', CuO: 'bột đen', MnO2: 'bột đen ánh nâu' };
+const TOOLS = [
+  { id: 'tube', name: 'Ống nghiệm', size: 'Φ16 mm, cao 160 mm, bo miệng (đúng danh mục thiết bị tối thiểu THPT, mục 1.6)', use: 'Nơi diễn ra hầu hết thí nghiệm lượng nhỏ. 1 mL cao khoảng 6,5 mm trong ống.', make: () => { const t = makeTestTube({ h: 1.6, r: 0.08 }); t.userData.setLevel(0.35); return t; } },
+  { id: 'rack', name: 'Giá ống nghiệm', size: 'nhựa hai tầng 180 × 110 × 56 mm, 5 lỗ Φ19 mm, 5 cọc cắm (danh mục mục 1.38)', use: 'Giữ ống nghiệm đứng; cọc cắm để úp ống cho ráo.', make: () => { const r = makeSchoolRack(); r.userData.slotX.forEach((x, i) => { const t = makeTestTube({ h: 1.6, r: 0.08 }); t.userData.setLevel([0.3, 0.22, 0, 0, 0][i] || 0.001); t.userData.liquid.visible = i < 2; t.position.set(x, r.userData.slotY, r.userData.slotZ); r.add(t); }); return r; } },
+  { id: 'beaker', isNew: 1, name: 'Cốc thuỷ tinh có mỏ 100 mL', size: 'Φ50 mm, cao 73 mm, có miệng rót (danh mục mục 1.4)', use: 'Pha, chứa dung dịch; rót sang ống nghiệm qua mỏ.', make: () => { const b = makeBeaker(); b.userData.setVolume(60); return b; } },
+  { id: 'flask', name: 'Bình tam giác 250 mL', size: 'đáy Ø 85 mm, cao 145 mm', use: 'Phản ứng lượng lớn, có thể đậy nút dẫn khí.', make: () => makeFlask() },
+  { id: 'dropper', isNew: 1, name: 'Ống nhỏ giọt', size: 'ống thuỷ tinh Φ8 mm, dài 120 mm, quả bóp cao su (danh mục mục 1.10)', use: 'Hút và nhỏ từng giọt (khoảng 0,05 mL một giọt).', make: () => { const d = makeDropper(); d.userData.setFill(0.5); return lay(d, -0.75, 0.012, 0, [0, 0, -(Math.PI / 2 - 0.053)]); } },
+  { id: 'rod', isNew: 1, name: 'Đũa thuỷ tinh', size: 'Φ6 mm, dài 250 mm (danh mục mục 1.18)', use: 'Khuấy dung dịch; chấm dung dịch lên giấy quỳ.', make: () => lay(makeGlassRod(), -1.25, 0.03, 0, [0, 0, -Math.PI / 2]) },
+  { id: 'holder', isNew: 1, name: 'Kẹp ống nghiệm bằng gỗ', size: 'dài 18 cm', use: 'Kẹp ống nghiệm khi đun trên đèn cồn.', make: () => { const h = makeTubeHolder(); h.userData.setOpen(0.05); return lay(h, -0.85, 0.08, 0, [-Math.PI / 2, 0, 0]); } },
+  { id: 'spatula', isNew: 1, name: 'Thìa lấy hoá chất', size: 'thuỷ tinh, dài 160 mm, thân Φ5 mm (danh mục mục 1.19)', use: 'Xúc chất rắn dạng bột, hạt từ lọ ra.', make: () => { const s = makeSpatula(); const p = makeChemSolid('CuO'); p.scale.setScalar(0.45); s.userData.holder.add(p); return lay(s, -0.7, 0, 0); } },
+  { id: 'lamp', isNew: 1, name: 'Đèn cồn', size: 'thân Φ75 mm, cao 84 mm, cổ Φ22 mm, nút bấc bằng sứ, nắp thuỷ tinh (danh mục mục 1.20)', use: 'Đun nóng ống nghiệm. Tắt bằng cách đậy chụp, không thổi.', make: () => { const l = makeAlcoholLamp(); l.userData.capOff(0.75); l.userData.setLit(true); return l; } },
+  { id: 'wash', isNew: 1, name: 'Bình tia nước cất', size: '250 mL, Ø 60 mm, cao 16 cm kể cả vòi', use: 'Thêm nước cất, tráng rửa dụng cụ.', make: () => makeWashBottle() },
+  { id: 'watch', name: 'Mặt kính đồng hồ', size: 'Ø 90 mm', use: 'Đựng chất rắn chờ dùng; đậy cốc.', make: () => { const w = makeWatchGlass(); const s = makeChemSolid('Zn'); w.userData.holder.add(s); return w; } },
+  { id: 'litmus', isNew: 1, name: 'Giấy quỳ tím', size: 'băng 70 × 8 mm', use: 'Thử môi trường acid (hoá đỏ) hay base (hoá xanh).', make: () => { const g = new THREE.Group(); [[null, 0], ['#d9534f', -0.14], ['#3b6fd0', 0.14]].forEach(([c, z]) => { const s = makeLitmus(); if (c) s.userData.setWet(c, 0.42); s.position.z = z; g.add(s); }); return g; } },
+  { id: 'hotplate', name: 'Bếp điện', size: '19 × 24 cm, mặt gia nhiệt Ø 14 cm', use: 'Đun cốc, bình khi cần giữ nhiệt độ.', make: () => makeHotplate() },
+];
+const BOTTLES = [
+  { id: 'b_clear', isNew: 1, name: 'Lọ miệng hẹp 100 mL (trắng)', size: 'cao 95 mm, thân Φ45, miệng Φ18, nút nhám kèm ống hút nhỏ giọt (danh mục mục 1.8)', use: 'Dung dịch không kị sáng. Rút nút ra là có ống hút để nhỏ giọt.', make: () => makeChemContainer(BY_ID.HCl, { small: true }) },
+  { id: 'b_amber', isNew: 1, name: 'Lọ miệng hẹp 100 mL (nâu)', size: 'cao 95 mm, thân Φ45, miệng Φ18, nút nhám kèm ống hút nhỏ giọt (danh mục mục 1.8)', use: 'Dung dịch kị sáng: AgNO₃, KMnO₄, KI, H₂O₂, HNO₃.', make: () => makeChemContainer(BY_ID.AgNO3, { small: true }) },
+  { id: 'b_wide', isNew: 1, name: 'Lọ miệng rộng', size: 'cao 95 mm, thân Φ50, miệng Φ40, nút nhám 3 nấc (danh mục mục 1.9)', use: 'Chất rắn: kim loại, oxide, đá vôi.', make: () => makeChemContainer(BY_ID.Zn, { small: true }) },
+  { id: 'b_drop', isNew: 1, name: 'Lọ nhỏ giọt 30 mL', size: 'Ø 34 mm, thuỷ tinh nâu, nắp có ống hút', use: 'Chất chỉ thị, dùng từng giọt.', make: () => makeChemContainer(BY_ID.pp) },
+];
+const SOLIDS = ['Na', 'Mg', 'Al', 'Zn', 'Fe', 'Cu', 'Ag', 'CaCO3', 'CaO', 'CuO', 'MnO2'].map((id) => ({ id: 's_' + id, isNew: 1, name: `${pretty(BY_ID[id].f)} · ${SOLID_LOOK[id]}`, short: pretty(BY_ID[id].f), size: 'cỡ một lần lấy cho ống nghiệm (vài mm đến 3 cm)', use: BY_ID[id].name + '. Vân bề mặt là ảnh Codex gen (LAB-006).' + (id === 'CuO' || id === 'MnO2' ? ' Bột đen đặt trên giấy cân trắng cho dễ thấy.' : ''), make: () => { const g = makeChemSolid(id); if (id === 'CuO' || id === 'MnO2') { const paper = new THREE.Mesh(new THREE.CircleGeometry(0.34, 48), new THREE.MeshStandardMaterial({ color: 0xf7f6f2, roughness: 1 })); paper.rotation.x = -Math.PI / 2; paper.position.y = 0.002; paper.receiveShadow = true; g.add(paper); } return g; }, small: 1 }));
+const CAB = CHEMS.map((c) => ({ id: 'c_' + c.id, name: `${c.group === 'indicator' ? c.name : pretty(c.f)} · ${c.name}`, short: c.group === 'indicator' ? c.name : pretty(c.f), size: c.conc ? `nồng độ ghi trên nhãn: ${c.id === 'H2O2' ? '3%' : String(c.conc).replace('.', ',') + ' M'}` : 'chất rắn hoặc dụng cụ thử', use: 'Một lọ trong tủ 40 chất. Chữ trên nhãn do mã vẽ.', make: () => makeChemContainer(c, { small: true }) }));
+const GROUPS = [['Dụng cụ', TOOLS], ['Kiểu lọ đựng', BOTTLES], ['Chất rắn', SOLIDS], ['Tủ 40 chất', CAB]];
+const ALL = GROUPS.flatMap((g) => g[1]);
+
+// ---------- cảnh ----------
+const stageEl = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.25;
+stageEl.prepend(renderer.domElement);
+const pmrem = new THREE.PMREMGenerator(renderer);
+let ENV = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+function makeScene() {
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0xe8ecf0); scene.environment = ENV;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xd9dde1, 1.5));
+  const sun = new THREE.DirectionalLight(0xfff8ee, 2.2); sun.position.set(-3.5, 6, 4); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -3, right: 3, top: 3, bottom: -3, near: 0.5, far: 20 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.01; sun.shadow.radius = 4; scene.add(sun);
+  const bench = new THREE.Mesh(new THREE.CircleGeometry(60, 64), texMat('tex_epoxy', { fallback: PAL.benchTop, roughness: 0.62, rep: 90 })); bench.rotation.x = -Math.PI / 2; bench.receiveShadow = true; scene.add(bench);
+  const slot = new THREE.Group(); scene.add(slot);
+  return { scene, slot };
+}
+const main = makeScene(), shot = makeScene();
+const camera = new THREE.PerspectiveCamera(30, 4 / 3, 0.02, 80), shotCam = new THREE.PerspectiveCamera(30, 1, 0.02, 80);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enablePan = false; controls.maxPolarAngle = Math.PI / 2 - 0.03; controls.addEventListener('change', () => render());
+// Thước so cỡ: vạch trắng trên mặt bàn, dài 5 cm (món nhỏ: 1 cm).
+function ruler(len, label) {
+  const g = new THREE.Group();
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(len, 0.002, 0.012), new THREE.MeshBasicMaterial({ color: 0xffffff })); bar.position.y = 0.002;
+  const tick = (x) => { const t = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.002, 0.05), bar.material); t.position.set(x, 0.002, 0); return t; };
+  const tex = canvasTexture(256, 96, (c, w, h) => { c.fillStyle = '#fff'; c.font = `600 64px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(label, w / 2, h / 2); });
+  const k = Math.max(len, 0.25), txt = new THREE.Mesh(new THREE.PlaneGeometry(k * 0.8, k * 0.3), new THREE.MeshBasicMaterial({ map: tex, transparent: true })); txt.rotation.x = -Math.PI / 2; txt.position.set(0, 0.003, k * 0.22);
+  g.add(bar, tick(-len / 2), tick(len / 2), txt); return g;
+}
+function solidBox(root) { const box = new THREE.Box3(), t = new THREE.Box3(); root.updateWorldMatrix(true, true); root.traverse((o) => { if (o.isMesh && !(o.material.isMeshBasicMaterial && o.material.map && o.geometry.type === 'PlaneGeometry')) { t.setFromObject(o); box.union(t); } }); return box; }
+function place(target, item, withRuler) {
+  target.slot.clear(); const obj = item.make(); target.slot.add(obj);
+  const box = solidBox(obj), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+  obj.position.x -= c.x; obj.position.z -= c.z; // đặt giữa bàn
+  if (withRuler) { const small = Math.max(size.x, size.y, size.z) < 0.45, r = ruler(small ? 0.1 : 0.5, small ? '1 cm' : '5 cm'); r.position.set(0, 0, size.z / 2 + (small ? 0.09 : 0.22)); target.slot.add(r); }
+  return { size, cy: (box.min.y + box.max.y) / 2, obj };
+}
+function frame(cam, info, az = 0.55, elv = 0.36, pad = 1.25) {
+  const { size, cy } = info, rad = 0.5 * Math.hypot(size.x, size.y, size.z) * pad, fov = THREE.MathUtils.degToRad(cam.fov), d = rad / Math.sin(Math.min(fov, 2 * Math.atan(Math.tan(fov / 2) * cam.aspect)) / 2);
+  cam.position.set(Math.sin(az) * Math.cos(elv) * d, cy + Math.sin(elv) * d, Math.cos(az) * Math.cos(elv) * d); cam.lookAt(0, cy, 0); cam.near = d / 50; cam.far = d * 20; cam.updateProjectionMatrix();
+  return { d, cy };
+}
+function resize() { const w = stageEl.clientWidth || 640, h = stageEl.clientHeight || 480; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+function render() { renderer.render(main.scene, camera); }
+let lamp = null;
+async function thumb(item, W = 300, H = 300, pad = 0.95, az = 0.5, elv = 0.34) {
+  place(shot, item, false); await settled(); await new Promise((r) => setTimeout(r, 0));
+  renderer.setPixelRatio(1); renderer.setSize(W, H, false); shotCam.aspect = W / H;
+  const b = solidBox(shot.slot); frame(shotCam, { size: b.getSize(new THREE.Vector3()), cy: (b.min.y + b.max.y) / 2 }, az, elv, pad);
+  renderer.render(shot.scene, shotCam); const url = renderer.domElement.toDataURL('image/jpeg', 0.86);
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); resize(); render(); shot.slot.clear();
+  return url;
+}
+
+// ---------- đánh dấu ----------
+const KEY = 'lab_bo_do_dung_v1'; let REV = {}; try { REV = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { REV = {}; }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(REV)); } catch (e) { /* không lưu được thì thôi */ } };
+let cur = null; const cells = {};
+function mark(item) { const r = REV[item.id] || {}; cells[item.id].classList.toggle('s-ok', r.v === 'ok'); cells[item.id].classList.toggle('s-fix', r.v === 'fix'); }
+function summary() { const ok = ALL.filter((i) => REV[i.id]?.v === 'ok').length, fix = ALL.filter((i) => REV[i.id]?.v === 'fix').length; $('sum').textContent = `${ALL.length} món: ${ok} đạt, ${fix} cần sửa, ${ALL.length - ok - fix} chưa xem.`; }
+async function select(item) {
+  cur = item; Object.values(cells).forEach((c) => c.classList.remove('cur')); cells[item.id].classList.add('cur');
+  $('name').replaceChildren(item.name, el('span', { class: 'tag ' + (item.isNew ? 'new' : 'old') }, item.isNew ? 'Mới dựng' : 'Đã có từ bài mẫu'));
+  $('size').replaceChildren(el('b', {}, 'Kích thước thật: '), item.size); $('use').replaceChildren(el('b', {}, 'Dùng để: '), item.use);
+  const r = REV[item.id] || {}; $('bOk').classList.toggle('on', r.v === 'ok'); $('bFix').classList.toggle('on', r.v === 'fix'); $('note').value = r.note || '';
+  resize(); const info = place(main, item, true); const f = frame(camera, info, 0.55, 0.36, 1.18);
+  controls.target.set(0, f.cy, 0); controls.minDistance = f.d * 0.35; controls.maxDistance = f.d * 2.5; controls.update();
+  lamp = info.obj.userData.flicker ? info.obj : null;
+  await settled(); render(); setTimeout(render, 60);
+}
+const setV = (v) => { if (!cur) return; const r = (REV[cur.id] = REV[cur.id] || {}); r.v = r.v === v ? null : v; save(); mark(cur); summary(); $('bOk').classList.toggle('on', r.v === 'ok'); $('bFix').classList.toggle('on', r.v === 'fix'); };
+$('bOk').addEventListener('click', () => setV('ok')); $('bFix').addEventListener('click', () => setV('fix'));
+$('note').addEventListener('input', () => { if (!cur) return; (REV[cur.id] = REV[cur.id] || {}).note = $('note').value; save(); });
+$('copy').addEventListener('click', async () => { const lines = ALL.filter((i) => REV[i.id]?.v === 'fix').map((i) => `- ${i.name}: ${REV[i.id].note || '(chưa ghi chú)'}`); const text = lines.length ? 'Cần sửa trong bộ đồ dùng:\n' + lines.join('\n') : 'Chưa có món nào đánh dấu Cần sửa.'; try { await navigator.clipboard.writeText(text); $('copy').textContent = 'Đã chép'; } catch (e) { prompt('Chép đoạn này:', text); } setTimeout(() => { $('copy').textContent = 'Chép danh sách cần sửa'; }, 1500); });
+
+// ---------- dựng trang ----------
+const list = $('list');
+for (const [title, items] of GROUPS) {
+  list.append(el('div', { class: 'sec' }, `${title} (${items.length})`));
+  list.append(el('div', { class: 'grid' }, ...items.map((it) => (cells[it.id] = el('div', { class: 'it', title: it.name, onclick: () => select(it) }, el('div', { class: 'ph' }), el('i'), el('span', {}, it.short || it.name))))));
+}
+ALL.forEach(mark); summary();
+addEventListener('resize', () => { resize(); render(); });
+setInterval(() => { if (lamp && lamp.userData.lit) { lamp.userData.flicker(performance.now() / 1000); render(); } }, 60);
+
+// Ảnh toàn cảnh của phòng lab làm nguồn phản chiếu, rồi mới chụp hình nhỏ.
+await new Promise((ok) => new THREE.TextureLoader().load('./assets/env/pano_lab.jpg', (t) => { t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace; ENV = pmrem.fromEquirectangular(t).texture; main.scene.environment = shot.scene.environment = ENV; t.dispose(); ok(); }, undefined, ok));
+if (document.fonts?.ready) await document.fonts.ready;
+await select(TOOLS[0]);
+window.__kit = { ALL, select, thumb, render, renderer, camera, controls, main, done: false, errors: [] };
+for (const it of ALL) {
+  try { const url = await thumb(it); cells[it.id].querySelector('.ph').replaceWith(el('img', { src: url, alt: it.name })); } catch (e) { window.__kit.errors.push(`${it.id}: ${e.message}`); console.error(it.id, e); }
+}
+window.__kit.done = true;
+</script>
+</body>
+</html>

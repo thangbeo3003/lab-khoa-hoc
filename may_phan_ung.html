@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Máy phản ứng · bản thử</title>
+<style>
+:root { --ink:#16324f; --ink2:#52657a; --muted:#7c8b9a; --bg:#f2f5f8; --card:#fff; --line:#dbe3ea; --pri:#1f6feb; --pri-soft:#e8f0fe;
+  --good:#1e9e6a; --good-soft:#e3f5ec; --warn:#b26a00; --warn-soft:#fff3dc; --none:#5b6b7a; --none-soft:#eef1f4;
+  --font:"Be Vietnam Pro",-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 var(--font); }
+.wrap { max-width:1180px; margin:0 auto; padding:20px 16px 48px; }
+header h1 { font-size:24px; margin:0 0 4px; }
+header p { margin:0; color:var(--ink2); }
+.tag { display:inline-block; padding:2px 10px; border-radius:99px; font-size:12.5px; font-weight:600; background:var(--warn-soft); color:var(--warn); margin-left:8px; vertical-align:3px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
+.top { display:flex; flex-direction:column-reverse; gap:14px; margin-top:16px; }
+.pick { display:grid; gap:14px; align-content:start; }
+@media (min-width:1080px) { .top { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr); align-items:start; } .res { position:sticky; top:12px; } }
+.pick h2, .sec { font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:0 0 8px; font-weight:700; }
+.grp { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; }
+.grp > b { flex:0 0 78px; font-size:12.5px; color:var(--ink2); font-weight:600; }
+.chip { font:inherit; font-size:14px; padding:5px 10px; border-radius:10px; border:1px solid var(--line); background:#fff; color:var(--ink); cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+.chip i { width:10px; height:10px; border-radius:50%; border:1px solid rgba(0,0,0,.18); flex:none; }
+.chip:hover { border-color:var(--pri); }
+.chip.on { background:var(--pri); border-color:var(--pri); color:#fff; font-weight:600; }
+.chosen { margin:2px 0 10px; font-weight:600; min-height:22px; }
+.chosen small { font-weight:400; color:var(--ink2); }
+.opts { display:flex; flex-wrap:wrap; gap:10px 22px; align-items:center; margin-top:14px; }
+.opts label { display:flex; align-items:center; gap:8px; }
+.opts input[type=number] { width:64px; font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:8px; }
+.result { display:grid; gap:16px; margin-top:14px; }
+@media (min-width:640px) { .result { grid-template-columns:190px 1fr; } }
+/* ống nghiệm */
+.tubebox { display:flex; flex-direction:column; align-items:center; justify-content:flex-end; background:linear-gradient(#f7fafc,#e9eef3); border-radius:14px; padding:18px 0 14px; min-height:330px; position:relative; align-self:start; }
+.tube { width:74px; height:250px; border:3px solid rgba(120,150,175,.75); border-top:none; border-radius:0 0 37px 37px; position:relative; overflow:hidden; background:rgba(255,255,255,.55); }
+.tube::before { content:""; position:absolute; left:8px; top:0; bottom:22px; width:7px; border-radius:4px; background:rgba(255,255,255,.75); z-index:5; }
+.lip { width:88px; height:8px; border:3px solid rgba(120,150,175,.75); border-radius:6px; background:rgba(255,255,255,.7); }
+.liq { position:absolute; left:0; right:0; bottom:0; height:62%; transition:background-color 1.6s ease .3s; }
+.ppt { position:absolute; left:0; right:0; bottom:0; height:0; opacity:.96; transition:height 2.2s ease .5s; border-radius:0 0 34px 34px; }
+.haze { position:absolute; left:0; right:0; bottom:0; height:62%; opacity:0; transition:opacity 1.2s ease .2s; }
+.metal { position:absolute; left:50%; bottom:10px; width:30px; height:12px; margin-left:-15px; border-radius:3px; transform:rotate(-8deg); transition:background-color 2.4s ease .6s, opacity 3s ease 1s, width 3s ease 1s; z-index:3; }
+.bub { position:absolute; bottom:8px; width:6px; height:6px; border-radius:50%; border:1.5px solid rgba(255,255,255,.95); background:rgba(255,255,255,.35); animation:rise linear infinite; z-index:4; }
+@keyframes rise { from { transform:translateY(0) scale(.6); opacity:0; } 12% { opacity:1; } to { transform:translateY(-150px) scale(1.15); opacity:0; } }
+.heat { position:absolute; inset:auto 0 0 0; height:120px; background:radial-gradient(ellipse at 50% 100%, rgba(240,120,40,.28), transparent 70%); opacity:0; transition:opacity 1.5s; pointer-events:none; }
+.tubecap { margin-top:10px; font-size:12.5px; color:var(--ink2); text-align:center; padding:0 10px; }
+/* thẻ kết quả */
+.verdict { display:inline-block; padding:4px 14px; border-radius:99px; font-weight:700; font-size:14px; }
+.v-reaction { background:var(--good-soft); color:var(--good); } .v-none { background:var(--none-soft); color:var(--none); } .v-na { background:var(--warn-soft); color:var(--warn); }
+#out { min-width:0; }
+.opts label.off { display:none; }
+.pairname { font-size:20px; font-weight:700; margin:8px 0 12px; }
+.fx { list-style:none; margin:0 0 14px; padding:0; display:grid; gap:6px; }
+.fx li { display:flex; gap:10px; align-items:center; }
+.fx li i { width:18px; height:18px; border-radius:5px; border:1px solid rgba(0,0,0,.2); flex:none; }
+.eq { font-size:clamp(19px,2.6vw,28px); font-weight:700; padding:14px 16px; border-radius:12px; background:#0f2740; color:#fff; overflow-x:auto; white-space:nowrap; margin-bottom:6px; }
+.eq.second { background:#234a6e; font-size:clamp(16px,2.1vw,22px); }
+.ion { color:var(--ink2); margin:0 0 14px; }
+.ion b { color:var(--ink); }
+.why { border-left:4px solid var(--pri); padding:2px 0 2px 12px; margin:0 0 12px; }
+.notes { margin:0; padding-left:18px; color:var(--ink2); }
+.amount { margin-top:12px; padding:10px 12px; border-radius:10px; background:var(--pri-soft); }
+/* bảng tổng */
+.matrix { overflow:auto; margin-top:10px; }
+table.mx { border-collapse:separate; border-spacing:1px; font-size:10.5px; }
+.mx th { font-weight:600; color:var(--ink2); white-space:nowrap; padding:0 4px 0 0; text-align:right; }
+.mx thead th { height:74px; padding:0; vertical-align:bottom; text-align:left; }
+.mx thead th span { display:block; width:17px; transform:rotate(-60deg) translate(2px,-2px); transform-origin:left bottom; white-space:nowrap; }
+.mx td { width:17px; height:17px; padding:0; border-radius:3px; cursor:pointer; }
+.mx td.reaction { background:#1e9e6a; } .mx td.none { background:#cfd6dd; } .mx td.na { background:#f4c56a; } .mx td.self { background:transparent; cursor:default; }
+.mx td.cur { outline:2px solid var(--ink); outline-offset:0; }
+.legend { display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:10px; color:var(--ink2); }
+.legend i { display:inline-block; width:13px; height:13px; border-radius:3px; vertical-align:-2px; margin-right:6px; }
+.foot { margin-top:14px; color:var(--ink2); font-size:13.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Máy phản ứng <span class="tag">Bản thử · chưa có giáo viên duyệt</span></h1>
+    <p id="stat">Chọn hai chất bất kỳ. App cho biết có phản ứng không, thấy hiện tượng gì, phương trình và lý do.</p>
+  </header>
+  <div class="top">
+  <div class="pick">
+    <div class="card"><h2>Chất thứ nhất</h2><div class="chosen" id="nameA"></div><div id="pickA"></div></div>
+    <div class="card"><h2>Chất thứ hai</h2><div class="chosen" id="nameB"></div><div id="pickB"></div></div>
+  </div>
+  <div class="card res">
+    <div class="opts">
+      <label><span id="lblA">Lượng chất 1</span> <input type="number" id="volA" min="0.5" max="20" step="0.5" value="2"> mL</label>
+      <label><span id="lblB">Lượng chất 2</span> <input type="number" id="volB" min="0.5" max="20" step="0.5" value="2"> mL</label>
+      <label><input type="checkbox" id="acid"> Thêm vài giọt H₂SO₄ loãng (môi trường acid)</label>
+    </div>
+    <div class="result">
+      <div class="tubebox">
+        <div class="lip"></div>
+        <div class="tube" id="tube"><div class="liq" id="liq"></div><div class="haze" id="haze"></div><div class="ppt" id="ppt"></div><div class="metal" id="metal"></div><div class="heat" id="heat"></div></div>
+        <div class="tubecap" id="tubecap"></div>
+      </div>
+      <div id="out"></div>
+    </div>
+  </div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <div class="sec">Toàn bộ 780 cặp</div>
+    <div id="count"></div>
+    <div class="legend"><span><i style="background:#1e9e6a"></i>Có phản ứng</span><span><i style="background:#cfd6dd"></i>Không phản ứng</span><span><i style="background:#f4c56a"></i>Chưa có dữ liệu (app không đoán)</span></div>
+    <div class="matrix"><table class="mx" id="mx"></table></div>
+    <p class="foot">Bấm một ô để xem cặp đó. Dung dịch dùng nồng độ ghi trên nhãn (phần lớn 0,1 đến 1 M), ở nhiệt độ phòng, không đun.</p>
+  </div>
+</div>
+<script type="module">
+import { predict, limiting, moles, CHEMS, BY_ID } from './src/chem/engine.js';
+import { pretty } from './src/chem/formula.js';
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, ...kids) => { const n = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k === 'class') n.className = v; else if (k === 'style') n.style.cssText = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v); } n.append(...kids.filter((x) => x != null)); return n; };
+const GROUPS = [['acid', 'Acid'], ['base', 'Base'], ['salt', 'Muối'], ['metal', 'Kim loại'], ['solid', 'Chất rắn'], ['other', 'Khác'], ['indicator', 'Chỉ thị']];
+const HEX = { 'trắng': '#f6f8fa', 'trắng xanh': '#cfe3d6', 'trắng ngả vàng': '#f1ecd0', 'vàng': '#f0cf3a', 'xanh lam': '#4aa3e8', 'nâu đỏ': '#9a4a2a', 'nâu đen': '#3a2a22', 'xám': '#8c9199', 'đỏ': '#b5552e', 'trắng xám': '#c9ced4', 'trắng bạc': '#d3d8de', 'đen': '#2b2b2e' };
+const CLEAR = '#dfeefa';
+const label = (c) => (c.group === 'indicator' ? c.name : pretty(c.f));
+const fmt = (x, d = 2) => x.toFixed(d).replace('.', ',');
+const S = { a: 'CuSO4', b: 'NaOH' };
+
+function picker(host, side) {
+  host.replaceChildren(...GROUPS.map(([g, name]) => el('div', { class: 'grp' }, el('b', {}, name), ...CHEMS.filter((c) => c.group === g).map((c) =>
+    el('button', { class: 'chip' + (S[side] === c.id ? ' on' : ''), title: c.name, onclick: () => { S[side] = c.id; draw(); } }, c.hex || HEX[c.color] ? el('i', { style: `background:${c.hex || HEX[c.color]}` }) : null, label(c))))));
+}
+
+function drawTube(A, B, r) {
+  const liq = $('liq'), ppt = $('ppt'), metal = $('metal'), heat = $('heat'), haze = $('haze'), tube = $('tube');
+  tube.querySelectorAll('.bub').forEach((n) => n.remove());
+  const start = A.hex || B.hex || CLEAR, fx = Object.fromEntries(r.effects.map((e) => [e.type, e]));
+  const solid = [A, B].find((c) => c.group === 'metal' || c.group === 'solid');
+  // đặt trạng thái đầu ngay (không chuyển động), rồi mới chạy sang trạng thái cuối
+  for (const n of [liq, ppt, metal, heat, haze]) n.style.transition = 'none';
+  liq.style.backgroundColor = start; ppt.style.height = '0'; heat.style.opacity = 0; haze.style.opacity = 0;
+  metal.style.opacity = solid ? 1 : 0; metal.style.width = '30px'; metal.style.backgroundColor = solid ? (HEX[solid.color] || '#9aa1a9') : 'transparent';
+  void tube.offsetWidth; for (const n of [liq, ppt, metal, heat, haze]) n.style.transition = '';
+  if (fx.color) liq.style.backgroundColor = fx.color.hex || CLEAR;
+  else if (fx.ppt && (A.hex || B.hex)) liq.style.backgroundColor = CLEAR; // ion có màu đã vào kết tủa
+  if (fx.ppt) { const c = HEX[fx.ppt.color] || '#eef1f4'; ppt.style.background = c; ppt.style.height = /vẩn đục/.test(fx.ppt.form) ? '9%' : '24%'; haze.style.background = c; haze.style.opacity = .35; }
+  if (fx.coat) metal.style.backgroundColor = HEX[fx.coat.color] || '#8c9199';
+  else if (fx.dissolve && solid) { metal.style.opacity = .15; metal.style.width = '8px'; }
+  if (fx.heat) heat.style.opacity = fx.heat.level === 'mạnh' ? 1 : .45;
+  if (fx.gas) { const n = { 'rất mạnh': 26, 'mạnh': 18, 'vừa': 11, 'chậm': 5, 'nhẹ': 5 }[fx.gas.rate] || 8;
+    for (let i = 0; i < n; i++) tube.append(el('span', { class: 'bub', style: `left:${10 + Math.random() * 46}px; animation-duration:${1.1 + Math.random() * 1.6}s; animation-delay:${Math.random() * 2}s; width:${4 + Math.random() * 5}px; height:${4 + Math.random() * 5}px` })); }
+  $('tubecap').textContent = r.kind === 'na' ? 'App chưa có dữ liệu nên không diễn hiệu ứng.' : r.kind === 'none' ? 'Không có gì thay đổi.' : 'Minh hoạ nhanh; bàn thí nghiệm 3D sẽ diễn đầy đủ.';
+}
+
+function draw() {
+  const A = BY_ID[S.a], B = BY_ID[S.b];
+  picker($('pickA'), 'a'); picker($('pickB'), 'b');
+  $('nameA').replaceChildren(label(A) + ' ', el('small', {}, `· ${A.name}${A.conc ? ` ${fmt(A.conc, A.conc < 0.1 ? 2 : 1)} M` : ''}`));
+  $('nameB').replaceChildren(label(B) + ' ', el('small', {}, `· ${B.name}${B.conc ? ` ${fmt(B.conc, B.conc < 0.1 ? 2 : 1)} M` : ''}`));
+  const liquid = (c) => c.conc != null;
+  $('volA').parentElement.classList.toggle('off', !liquid(A)); $('volB').parentElement.classList.toggle('off', !liquid(B));
+  $('lblA').textContent = `Lượng ${label(A)}`; $('lblB').textContent = `Lượng ${label(B)}`;
+  const vA = Number($('volA').value) || 2, vB = Number($('volB').value) || 2;
+  const r = predict(S.a, S.b, { medium: $('acid').checked ? 'acid' : null, volA: liquid(A) ? vA : 1, volB: liquid(B) ? vB : 1 });
+  const out = $('out'), V = { reaction: 'Có phản ứng', none: 'Không phản ứng', na: 'Chưa có dữ liệu' }[r.kind];
+  const kids = [el('span', { class: `verdict v-${r.kind}` }, V), el('div', { class: 'pairname' }, `${label(A)} + ${label(B)}`)];
+  if (r.effects.length) kids.push(el('div', { class: 'sec' }, 'Hiện tượng'), el('ul', { class: 'fx' }, ...r.effects.map((e) => el('li', {}, el('i', { style: `background:${e.type === 'ppt' ? HEX[e.color] || '#eee' : e.type === 'color' ? e.hex || CLEAR : e.type === 'coat' ? HEX[e.color] || '#999' : e.type === 'gas' ? '#fff' : e.type === 'heat' ? '#f3a05a' : '#e8edf2'}; ${e.type === 'gas' ? 'border-radius:50%' : ''}` }), e.text))));
+  if (r.equation) kids.push(el('div', { class: 'sec' }, 'Phương trình'), el('div', { class: 'eq' }, r.equation));
+  if (r.equation2) kids.push(el('div', { class: 'eq second' }, r.equation2));
+  if (r.ionic) kids.push(el('p', { class: 'ion' }, 'Phương trình ion thu gọn: ', el('b', {}, r.ionic)));
+  kids.push(el('div', { class: 'sec' }, r.kind === 'na' ? 'Vì sao app chưa trả lời' : 'Vì sao'), el('p', { class: 'why' }, r.reason));
+  if (r.needs === 'acid') kids.push(el('p', {}, el('button', { class: 'chip', onclick: () => { $('acid').checked = true; draw(); } }, 'Thêm H₂SO₄ loãng rồi thử lại')));
+  if (r.notes.length) kids.push(el('div', { class: 'sec' }, 'Ghi chú'), el('ul', { class: 'notes' }, ...r.notes.map((n) => el('li', {}, n))));
+  if (r.eq && liquid(A) && liquid(B)) { const l = limiting(r, moles(S.a, { mL: vA }), moles(S.b, { mL: vB }));
+    if (l) kids.push(el('div', { class: 'amount' }, l.limiting ? `Với ${fmt(vA, 1)} mL ${label(A)} và ${fmt(vB, 1)} mL ${label(B)}: ${label(BY_ID[l.limiting])} hết trước, còn dư ${fmt(l.left[l.limiting === S.a ? S.b : S.a] * 1000)} mmol ${label(BY_ID[l.limiting === S.a ? S.b : S.a])}. ` : 'Hai chất vừa đủ với nhau. ', `Tạo ra ${l.products.map((p) => `${fmt(p.mol * 1000)} mmol ${pretty(p.f)}`).join(', ')}.`)); }
+  out.replaceChildren(...kids);
+  drawTube(A, B, r);
+  document.querySelectorAll('.mx td.cur').forEach((n) => n.classList.remove('cur'));
+  document.querySelectorAll(`.mx td[data-k="${S.a}|${S.b}"], .mx td[data-k="${S.b}|${S.a}"]`).forEach((n) => n.classList.add('cur'));
+}
+
+function matrix() {
+  const count = { reaction: 0, none: 0, na: 0 };
+  const short = (c) => (c.id === 'quy' ? 'Quỳ' : c.id === 'pp' ? 'PP' : label(c));
+  const head = el('tr', {}, el('th', {}), ...CHEMS.map((c) => el('th', {}, el('span', {}, short(c)))));
+  const rows = CHEMS.map((a, i) => el('tr', {}, el('th', {}, short(a)), ...CHEMS.map((b, j) => {
+    if (i === j) return el('td', { class: 'self' });
+    const r = predict(a.id, b.id); if (i < j) count[r.kind]++;
+    return el('td', { class: r.kind, 'data-k': `${a.id}|${b.id}`, title: `${label(a)} + ${label(b)}: ${r.phenomenon}`, onclick: () => { S.a = a.id; S.b = b.id; draw(); window.scrollTo({ top: 0, behavior: 'smooth' }); } });
+  })));
+  $('mx').replaceChildren(el('thead', {}, head), el('tbody', {}, ...rows));
+  $('count').textContent = `40 chất, 780 cặp: ${count.reaction} cặp có phản ứng, ${count.none} cặp không phản ứng, ${count.na} cặp app chưa có dữ liệu.`;
+}
+for (const id of ['volA', 'volB', 'acid']) $(id).addEventListener('input', draw);
+matrix(); draw();
+window.__mpu = { S, draw, predict };
+</script>
+</body>
+</html>

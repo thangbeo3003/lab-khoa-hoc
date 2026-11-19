@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="vi" data-bench="2d" data-proc="lens" data-ui="ds">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bàn thực hành · Lab Khoa Học</title>
+<link rel="stylesheet" href="./src/free/free.css">
+<link rel="stylesheet" href="./src/free/ds.css">
+<script type="importmap">
+  { "imports": { "three": "./vendor/three/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<!-- Giao diện theo DESIGN_SYSTEM.md (Soft Tech · Tím Pod). Sân khấu giữ nguyên: một khung, vòng kính tròn, hạt sống theo ống, thanh tua. Bản trước khi đổi: thuc_hanh_cu.html -->
+<div class="lb ds" id="app">
+  <aside class="app-sidebar" id="sidebar" aria-label="Lab Khoa Học"></aside>
+  <button class="menu-backdrop" id="menuBackdrop" aria-label="Đóng menu"></button>
+  <div class="app-main">
+    <header class="app-header" id="appHeader"></header>
+    <main class="workspace" id="workspace">
+      <button class="cab-backdrop" id="cabBackdrop" aria-label="Đóng tủ hoá chất"></button>
+      <div class="page-heading"><h1>Thực hành tự do</h1></div>
+      <section class="work" aria-label="Thao tác và quan sát">
+        <div class="dose-bar" id="doseBar"></div>
+        <div class="lb-split one" id="split">
+          <div class="lb-stagewrap one" id="stagewrap">
+            <div class="lb-stage" id="stage"></div>
+            <div class="lens" id="lens"><div class="lens-tint" id="lensTint"></div><div class="lens-empty" id="lensEmpty"></div></div>
+            <div class="lens-cap" id="lensCap"></div>
+            <div class="lv-time" id="lvTime"></div>
+            <aside class="lens-hud" id="lensHud"></aside>
+          </div>
+        </div>
+        <div class="tube-row" id="tubeRow"></div>
+        <section class="result" id="resultDs" aria-label="Kết quả quan sát"></section>
+      </section>
+      <aside class="cabinet" id="cabinet" aria-label="Tủ hoá chất"></aside>
+    </main>
+  </div>
+  <aside class="lb-book" id="book" hidden></aside>
+  <dialog id="layer" aria-labelledby="layerTitle"></dialog>
+  <div class="lb-toast" id="toast"></div>
+</div>
+<script type="module" src="./src/free/lab.js"></script>
+</body>
+</html>
