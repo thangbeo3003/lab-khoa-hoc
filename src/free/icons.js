@@ -41,5 +41,6 @@ const lucideIcons = {
 lucideIcons.thermo = '<path d="M12 4v10" /><path d="M10.5 4h3v10.3a3.4 3.4 0 1 1-3 0z" />';
 lucideIcons.splint = '<path d="M4 20 15 9" /><path d="M16 8c-1.5-1.5-.5-3 .8-5 .8 1.8 3 2.8 1.6 4.8a1.6 1.6 0 0 1-2.4.2z" />';
 lucideIcons.litmus = '<path d="M9 3h6v18H9z" /><path d="M9 13h6" />';
+lucideIcons.stir = '<path d="M5 9v9a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9" /><path d="M16.5 3 10.5 16" /><path d="M8 14.5c2 1.3 4.5 1.3 6.5 0" />'; // tự vẽ: cốc + đũa khuấy (19/11)
 export default lucideIcons;
 export function icon(name, size) { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '2'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.setAttribute('aria-hidden', 'true'); if (size) { s.style.width = size + 'px'; s.style.height = size + 'px'; } s.innerHTML = lucideIcons[name] || ''; return s; }

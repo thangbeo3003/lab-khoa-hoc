@@ -52,13 +52,21 @@ export function createShell(root, { meta, steps }) {
     next: h('button', { class: 'lk-nav is-pri', type: 'button', onclick: () => go(state.step + 1) }, 'Bước sau ›'),
     count: h('span', { class: 'lk-count' }),
     note: h('p', { class: 'lk-note', text: meta.disclaimer || '' }),
+    actions: h('div', { class: 'lk-actions' }), // nút của bài trên thanh tên bài (bố cục 'full')
   };
   els.stage.append(els.hud, els.overlay);
   const chain = h('div', { class: 'lk-chain' }, meta.chain.map((c, i) => [i > 0 && h('span', { class: 'lk-arrow', text: '→' }), h('span', { class: 'lk-link' }, h('b', { text: c[0] }), ' ', c[1])]));
   const DS = document.documentElement.dataset.ui === 'ds';
+  // meta.layout = 'full' (khung gọn theo trang mẫu, LUONG_1_BAI_HOC.md mục 2.17): cảnh 3D phủ kín vùng làm việc, thẻ "Bước này" bên trái và "Bảng điều khiển" bên phải nổi lên trên;
+  // đầu trang ba hàng: tên bài + câu hỏi chính + nút của bài · chuỗi nhân quả (mắt xích đang học sáng) · thanh bước; menu trái thành menu trượt dưới 1600 px.
+  const FULL = DS && meta.layout === 'full';
+  if (FULL) root.classList.add('is-full');
   const top = (withScore) => h('header', { class: 'lk-top' },
-    h('div', { class: 'lk-titlebar' }, h('span', { class: 'lk-grade', text: meta.grade }), h('h1', { class: 'lk-title', text: meta.title }), h('span', { class: 'lk-eq', text: meta.equation }), withScore && els.score),
-    chain, els.rail);
+    h('div', { class: 'lk-titlebar' }, FULL && h('button', { class: 'quiet icon-only lk-menu', type: 'button', 'aria-label': 'Mở menu', onclick: () => root.classList.add('menu-open') }, icon('menu')),
+      h('span', { class: 'lk-grade', text: meta.grade }), h('h1', { class: 'lk-title', text: meta.title }),
+      FULL && meta.mainQuestion ? h('span', { class: 'lk-mainq' }, h('b', { text: 'Câu hỏi chính' }), h('span', { text: meta.mainQuestion })) : h('span', { class: 'lk-eq', text: meta.equation }),
+      FULL && els.actions, withScore && els.score),
+    FULL ? [h('div', { class: 'lk-chainrow' }, h('span', { class: 'lk-chainlab', text: 'Chuỗi nhân quả' }), chain), els.rail] : [chain, els.rail]);
   const body = [h('main', { class: 'lk-main' }, els.stage, els.card, els.panel), h('footer', { class: 'lk-foot' }, h('div', { class: 'lk-footbar' }, els.prev, els.count, els.next), els.note)];
   if (!DS) root.replaceChildren(top(true), ...body);
   else { root.classList.add('ds'); const keycap = (ic) => h('span', { class: 'nav-icon' }, icon(ic));
@@ -74,11 +82,12 @@ export function createShell(root, { meta, steps }) {
       h('button', { class: 'menu-backdrop', type: 'button', 'aria-label': 'Đóng menu', onclick: () => root.classList.remove('menu-open') }),
       h('div', { class: 'app-main' },
         h('header', { class: 'app-header' }, h('button', { class: 'quiet icon-only menu-toggle', type: 'button', 'aria-label': 'Mở menu', onclick: () => root.classList.add('menu-open') }, icon('menu')),
-          h('div', { class: 'breadcrumb' }, h('span', { text: 'Lab Khoa Học' }), icon('chevron-right'), h('span', { text: 'Bài học' }), icon('chevron-right'), h('strong', { text: meta.grade })), h('div', { class: 'heading-actions' }, els.score)),
-        top(false), ...body)); }
+          h('div', { class: 'breadcrumb' }, h('span', { text: 'Lab Khoa Học' }), icon('chevron-right'), h('span', { text: 'Bài học' }), icon('chevron-right'), h('strong', { text: meta.grade })), h('div', { class: 'heading-actions' }, !FULL && els.score)),
+        top(FULL), ...body)); }
   steps.forEach((s, i) => els.rail.append(h('button', { type: 'button', 'data-i': i, title: s.short, onclick: () => go(i) }, h('i', { text: String(i + 1) }), h('span', { text: s.short }))));
 
   function renderCard() {
+    if (lesson && lesson.renderCard) { els.card.replaceChildren(); lesson.renderCard(state.step, els.card); return; } // bài tự dựng thẻ "Bước này"
     const i = state.step, s = steps[i], done = lesson ? lesson.isDone(i) : false;
     const kids = [
       h('div', { class: 'lk-step-head' }, h('span', { class: 'lk-num', text: String(i + 1) }), h('span', { class: 'lk-short', text: s.short }),
@@ -100,6 +109,9 @@ export function createShell(root, { meta, steps }) {
   }
   function renderRail() {
     [...els.rail.children].forEach((b, i) => { b.classList.toggle('is-on', i === state.step); b.classList.toggle('is-done', !!lesson && lesson.isDone(i)); if (i === state.step) b.scrollIntoView({ block: 'nearest', inline: 'center' }); });
+    // Chuỗi nhân quả sáng theo bước: bước nào khai báo link (số thứ tự mắt xích, hoặc mảng) thì mắt xích đó sáng
+    const on = [].concat(steps[state.step].link ?? []);
+    chain.querySelectorAll('.lk-link').forEach((el, k) => el.classList.toggle('is-on', on.includes(k)));
     els.count.textContent = `Bước ${state.step + 1} / ${steps.length}`;
     els.prev.disabled = state.step === 0; els.next.disabled = state.step === steps.length - 1;
   }
@@ -122,6 +134,7 @@ export function createShell(root, { meta, steps }) {
     rerenderPanel: () => { els.panel.replaceChildren(); lesson.renderPanel(state.step, els.panel); },
     setScore: (t) => { els.score.textContent = t; },
     attach: (l) => { lesson = l; go(state.step); },
+    full: FULL,
   };
   return shell;
 }

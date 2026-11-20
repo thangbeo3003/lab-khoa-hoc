@@ -39,9 +39,10 @@ function periodicTexture() {
 }
 
 // ----- Bàn đảo: mặt epoxy đen mờ, thân trắng, cánh tủ xám nhạt, tay nắm inox -----
-export function makeIsland({ w = 16, d = 7.5, sink = false } = {}) {
+// top = màu mặt bàn (mặc định đen mờ của style S2; bài bản 2 dùng mặt sáng để kính và chất lỏng nổi rõ).
+export function makeIsland({ w = 16, d = 7.5, sink = false, top: topColor = PAL.benchTop } = {}) {
   const g = new THREE.Group(), steel = steelMat();
-  const top = put(box(w, 0.3, d, solidMat(PAL.benchTop, 0.55)), 0, -0.15, 0); top.receiveShadow = true; top.castShadow = true;
+  const top = put(box(w, 0.3, d, solidMat(topColor, 0.55)), 0, -0.15, 0); top.receiveShadow = true; top.castShadow = true;
   const body = put(box(w - 0.6, 7.8, d - 0.6, solidMat(PAL.cabinet, 0.6)), 0, -4.2, 0); body.castShadow = true; body.receiveShadow = true;
   const plinth = put(box(w - 1.0, 0.9, d - 1.0, solidMat(PAL.plinth, 0.7)), 0, -8.55, 0);
   g.add(top, body, plinth);
@@ -77,10 +78,10 @@ function makeStool() {
 }
 
 // photo = đường dẫn thư mục ảnh: 4 tường dán ảnh mặt đứng (wall_back/left/right/front.jpg) thay cho đồ dựng bằng khối.
-// kind = 'lab' | 'kitchen' (bếp: không có bảng tuần hoàn, bàn đảo thứ hai, ghế đẩu). hd = dùng ảnh tường 4K.
-export function makeRoom({ photo = null, kind = 'lab', hd = false } = {}) {
+// kind = 'lab' | 'kitchen' (bếp: không có bảng tuần hoàn, bàn đảo thứ hai, ghế đẩu) | 'plain' (chỉ sàn, trần, tường trơn: nền gọn cho cảnh áp sát bàn). hd = dùng ảnh tường 4K.
+export function makeRoom({ photo = null, kind = 'lab', hd = false, wall: wallColor = PAL.wall } = {}) {
   const g = new THREE.Group(), steel = steelMat();
-  const wallMat = solidMat(PAL.wall, 0.95), white = solidMat(PAL.cabinet, 0.6);
+  const wallMat = solidMat(wallColor, 0.95), white = solidMat(PAL.cabinet, 0.6);
   const cx = (X0 + X1) / 2, cz = (Z0 + Z1) / 2, RW = X1 - X0, RD = Z1 - Z0, RH = CEIL - FLOOR, cy = (CEIL + FLOOR) / 2;
 
   // Sàn vinyl xám có đường ron mảnh, trần trắng có 6 tấm đèn
@@ -104,7 +105,7 @@ export function makeRoom({ photo = null, kind = 'lab', hd = false } = {}) {
   wall(RW, cx, Z0, 0, 'wall_back'); wall(RW, cx, Z1, Math.PI, 'wall_front'); wall(RD, X0, cz, Math.PI / 2, 'wall_left'); wall(RD, X1, cz, -Math.PI / 2, 'wall_right');
   g.add(put(box(RW, 1, 0.1, solidMat(PAL.cabinetFront, 0.7)), cx, FLOOR + 0.5, Z0 + 0.06), put(box(RW, 1, 0.1, solidMat(PAL.cabinetFront, 0.7)), cx, FLOOR + 0.5, Z1 - 0.06));
 
-  if (!photo) {
+  if (!photo && kind !== 'plain') {
   // Tường trái: ba cửa sổ lớn, ánh sáng ban ngày
   // Ngoài cửa sổ: trời sáng phía trên, tán cây mờ phía dưới
   const skyTex = canvasTexture(256, 256, (c) => {
@@ -147,7 +148,7 @@ export function makeRoom({ photo = null, kind = 'lab', hd = false } = {}) {
   const poster = new THREE.Mesh(new THREE.PlaneGeometry(14.4, 8.8), new THREE.MeshStandardMaterial({ map: periodicTexture(), roughness: 0.9 }));
   g.add(put(poster, 16.5, 8.4, Z0 + 0.12), put(box(14.8, 9.2, 0.1, steel), 16.5, 8.4, Z0 + 0.05));
 
-  if (!photo) {
+  if (!photo && kind !== 'plain') {
   // Tường phải: tủ cao; tường trước: bảng trắng
   for (let i = 0; i < 4; i++) { const c = put(box(4, 24, 7.6, white), X1 - 2, FLOOR + 12, Z0 + 9 + i * 7.9); c.castShadow = true; g.add(c, put(box(0.05, 23.2, 7.2, solidMat(PAL.cabinetFront, 0.5)), X1 - 4.03, FLOOR + 12, Z0 + 9 + i * 7.9), put(box(0.07, 1.6, 0.07, steel), X1 - 4.1, 1, Z0 + 6 + i * 7.9)); }
   g.add(put(box(24, 11, 0.12, solidMat(0xfafbfb, 0.35)), cx - 2, 7.5, Z1 - 0.1), put(box(24.4, 11.4, 0.08, steel), cx - 2, 7.5, Z1 - 0.05));

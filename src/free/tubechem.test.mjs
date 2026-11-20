@@ -34,5 +34,9 @@ const near = (a, b, e = 1e-9) => Math.abs(a - b) < e;
   const c = newTube(); add(c, 'CuSO4', { mL: 2 }); add(c, 'NaOH', { mL: 1 }); const hv = heat(c); ok(hv.length === 1 && c.ppt.length === 1 && c.ppt[0].f === 'CuO' && near(c.ppt[0].mol, 0.0002) && hv[0].r.equation.startsWith('Cu(OH)₂ → CuO + H₂O'), 'đun Cu(OH)2 ra CuO đen: ' + JSON.stringify(c.ppt) + ' ' + hv[0]?.r.equation);
   const n = newTube(); add(n, 'NaHCO3', { mL: 2 }); const e0 = add(n, 'CaCl2', { mL: 2 }).events; ok(e0[0].kind === 'none', 'NaHCO3 + CaCl2 nguội: không phản ứng'); const hn = heat(n); ok(hn.length === 1 && n.ppt[0].f === 'CaCO3' && near(n.ppt[0].mol, 0.0005) && n.lastGas === 'CO2' && hn[0].r.equation.startsWith('2NaHCO₃ + CaCl₂ → CaCO₃↓ + 2NaCl + CO₂↑ + H₂O'), 'đun NaHCO3 + CaCl2: ' + hn[0]?.r.equation);
   ok(heat(newTube()).length === 0, 'đun ống không có gì đặc biệt: không có phản ứng mới'); }
+// Sức chứa theo từng bình (đợt 1, 19/11): ống 12 mL, cốc 100 mL
+{ const o = newTube(); ok(o.cap === 12 && add(o, 'NaCl', { mL: 12 }).events && add(o, 'NaCl', { mL: 0.5 }).full, 'ống nghiệm: tối đa 12 mL');
+  const k = newTube(100); add(k, 'CuSO4', { mL: 40 }); const ev = add(k, 'NaOH', { mL: 40 }).events; ok(k.vol === 80 && ev.some((e) => e.kind === 'reaction') && k.ppt[0].f === 'Cu(OH)2', 'cốc 100 mL: 40 + 40 mL vẫn rót được, ra Cu(OH)2');
+  ok(add(k, 'NaOH', { mL: 21 }).full && !add(k, 'NaOH', { mL: 20 }).full && k.vol === 100, 'cốc 100 mL: quá 100 mL thì báo đầy'); }
 console.log(fail ? `CẦN SỬA: ${fail} lỗi` : 'ĐẠT: sổ sách ống nghiệm');
 process.exit(fail ? 1 : 0);

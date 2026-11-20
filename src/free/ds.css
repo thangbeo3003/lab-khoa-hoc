@@ -231,3 +231,51 @@ html[data-ui="ds"] body { background:var(--canvas); color:var(--text); font:400 
   .ds .result { flex-wrap:wrap; gap:4px 12px; } .ds .result .equation { flex-basis:100%; order:3; font-size:16px; white-space:normal; }
 }
 @media (prefers-reduced-motion: reduce) { .ds *, .ds *::before, .ds *::after { animation:none !important; transition:none !important; } }
+/* Tủ hai ngăn Hoá chất | Dụng cụ (đợt 1, 19/11): chỉ thêm lớp mới, không đổi token */
+.ds .cab-tabs { margin:0 0 12px; }
+.ds .cab-pane { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+.ds .cab-pane[hidden], .ds .cab-chemhead[hidden] { display:none !important; }
+.ds .tool-list { display:block; padding:4px 8px 12px; overflow:auto; }
+.ds .tool-group { padding:8px 10px 6px; color:var(--muted); font-size:12px; font-weight:650; }
+.ds .tool-row { grid-template-columns:28px minmax(0,1fr) auto; }
+.ds .tool-row:disabled { opacity:1; cursor:default; }
+.ds .tool-row .chem-meta { justify-items:end; }
+.ds .tool-ic { display:grid; place-items:center; width:28px; height:28px; border-radius:8px; background:var(--accent-soft); color:var(--accent-hover); }
+.ds .tool-ic svg { width:16px; height:16px; }
+.ds .tool-note { padding:12px 10px 0; color:var(--muted); font-size:12px; line-height:1.5; }
+/* Kho tủ Dụng cụ (19/11): ảnh nhỏ từng món; ảnh kính (nền xám 50%) trộn hard-light trên ô sáng để chỉ còn viền kính */
+.ds .tool-row { grid-template-columns:40px minmax(0,1fr) auto; }
+.ds .tool-ic.pic { width:40px; height:40px; background:#e9ecf2; border-radius:10px; overflow:hidden; }
+.ds .tool-ic.pic img { max-width:34px; max-height:36px; object-fit:contain; }
+.ds .tool-ic.pic img.glass { mix-blend-mode:hard-light; }
+.ds .tool-row.soon b, .ds .tool-row.soon .chem-name { color:var(--muted); }
+.ds .tool-row.soon .tool-ic.pic img { opacity:.7; }
+.ds .soon-tag, .ds .use-tag { display:inline-flex; padding:2px 7px; border-radius:999px; font-size:10px; font-weight:700; white-space:nowrap; }
+.ds .soon-tag { background:#f1f1f5; color:var(--muted); }
+.ds .use-tag { background:var(--accent-soft); color:var(--accent-hover); }
+/* Hàng trong kho: nhãn trạng thái xuống dưới tên để tên và mô tả đủ rộng */
+.ds .tool-row { grid-template-columns:40px minmax(0,1fr); row-gap:4px; }
+.ds .tool-row .chem-meta { grid-column:2; display:flex; flex-wrap:wrap; gap:4px; justify-items:start; justify-content:flex-start; text-align:left; }
+/* Bộ chọn bình khi nhiều hơn 6 bình: tên trên, thể tích dưới */
+.ds .tube-selector.many button { flex-direction:column; gap:0; min-height:44px; line-height:1.2; font-size:12px; white-space:normal; text-align:center; }
+.ds .tube-selector.many button svg { display:none; }
+.ds .tube-selector.many .reading { font-size:11px; }
+/* Ảnh nhỏ trong kho: ô nền xám đúng màu nền ảnh chụp (#808080) để kính hiện như ảnh sản phẩm, không trộn màu */
+.ds .tool-ic.pic { background:#808080; }
+.ds .tool-ic.pic img.glass { mix-blend-mode:normal; }
+/* Ảnh nhỏ kiểu B + D (20/11): ảnh vẽ sẵn cả ô nền tông mặt bàn, CSS chỉ bo góc */
+.ds .tool-ic.pic { width:44px; height:44px; background:transparent; border-radius:10px; }
+.ds .tool-ic.pic img { width:44px; height:44px; max-width:none; max-height:none; border-radius:10px; display:block; }
+.ds .tool-row { grid-template-columns:44px minmax(0,1fr); }
+.ds .chem-row.has-thumb { grid-template-columns:44px minmax(0,1fr) auto; min-height:58px; }
+.ds .chem-thumb { position:relative; width:44px; height:44px; }
+.ds .chem-thumb img { width:44px; height:44px; border-radius:10px; display:block; }
+.ds .chem-thumb .chem-check { position:absolute; right:-4px; top:-4px; box-shadow:0 0 0 2px #fff; }
+.ds .tool-row.soon .tool-ic.pic img { opacity:.75; }
+/* 21/11 (fork L2·UX, A1): lọ đang ở trên bàn thì nhãn "Trên bàn ×" xuống dòng riêng dưới tên chất, để cột tên đủ rộng và không ngắt giữa chữ ("Hydrochlori / c acid"). Chỉ áp cho trang L2 (.lb), hàng hoá chất có ảnh nhỏ. */
+.lb.ds .chem-row.has-thumb:not(.tool-row):has(.on-bench) { row-gap:3px; }
+.lb.ds .chem-row.has-thumb:not(.tool-row):has(.on-bench) > .chem-thumb { grid-row:1 / span 2; }
+.lb.ds .chem-row.has-thumb:not(.tool-row):has(.on-bench) > .chem-meta { display:contents; }
+.lb.ds .chem-row.has-thumb:not(.tool-row):has(.on-bench) .on-bench { grid-column:2 / -1; grid-row:2; justify-self:start; }
+/* 21/11 (fork L2·UX, A2): chữ tối thiểu 11 px ở trang L2 (chuẩn UI 20/11). Ghi đè riêng cho .lb, luật gốc ở trên giữ nguyên vì L1 đang dùng. */
+.lb.ds .nav-caption, .lb.ds .on-bench, .lb.ds .soon-tag, .lb.ds .use-tag { font-size:11px; }

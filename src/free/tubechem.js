@@ -5,7 +5,7 @@ import { predict, BY_ID, CHEMS } from '../chem/engine.js';
 import { INDICATOR } from '../chem/data.js';
 import { molarMass, pretty, equation } from '../chem/formula.js';
 
-export const DROP_ML = 0.05, MAX_ML = 12, CLEAR = '#dcecf5';
+export const DROP_ML = 0.05, MAX_ML = 12, CLEAR = '#dcecf5'; // MAX_ML: sức chứa mặc định (ống nghiệm). Mỗi bình mang sức chứa riêng t.cap (cốc 100 mL: 100)
 export const PIECE = { Zn: { g: 0.3, unit: 'hạt kẽm' }, CaCO3: { g: 0.25, unit: 'mẩu đá vôi' }, Mg: { g: 0.05, unit: 'đoạn dây magnesium' }, Fe: { g: 0.5, unit: 'đinh sắt' }, Cu: { g: 0.3, unit: 'đoạn dây đồng' }, Al: { g: 0.1, unit: 'mảnh nhôm' } };
 const PIECE_DEF = { g: 0.2, unit: 'mẩu' };
 const STRONG_H = { HCl: 1, H2SO4: 2, HNO3: 1 }, STRONG_OH = { NaOH: 1, CaOH2: 2 };
@@ -15,13 +15,13 @@ export const isSolid = (id) => ['metal', 'solid'].includes(BY_ID[id].group);
 const isReagent = (id) => BY_ID[id].group !== 'indicator' && id !== 'H2O';
 export const label = (id) => (BY_ID[id].group === 'indicator' ? BY_ID[id].name : pretty(BY_ID[id].f));
 
-export function newTube() { return { items: {}, order: [], vol: 0, ppt: [], tints: [], indicator: null, indShown: null, gasTotal: 0, lastGas: null }; }
+export function newTube(cap = MAX_ML) { return { cap, items: {}, order: [], vol: 0, ppt: [], tints: [], indicator: null, indShown: null, gasTotal: 0, lastGas: null }; }
 function item(t, id) { if (!t.items[id]) { t.items[id] = { id, mol: 0, mol0: 0, mL: 0, drops: 0, pieces: 0, coat: null }; t.order.push(id); } return t.items[id]; }
 
 // Thêm một chất. amt: { mL, drop?: true } cho chất lỏng, { piece: true } cho chất rắn. Trả về { full } hoặc { events }.
 export function add(t, id, amt) {
   const c = BY_ID[id];
-  if (amt.mL && t.vol + amt.mL > MAX_ML + 1e-9) return { full: true, events: [] };
+  if (amt.mL && t.vol + amt.mL > (t.cap ?? MAX_ML) + 1e-9) return { full: true, events: [] };
   const it = item(t, id), events = [];
   if (amt.mL) { t.vol += amt.mL; it.mL += amt.mL; if (amt.drop) it.drops += 1; }
   if (c.group === 'indicator') t.indicator = id;

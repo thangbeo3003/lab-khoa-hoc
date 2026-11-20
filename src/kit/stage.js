@@ -5,12 +5,15 @@ import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { PAL, QUALITY } from './materials.js';
 import { addLights } from './room.js';
 
-export function createStage(host) {
+// leader = true: nhãn đứng cao hơn điểm neo và có đường dẫn + chấm neo chỉ vào vật (mặc định tắt, giữ nguyên cách cũ).
+// oversample > 1: vẽ dày hơn số điểm ảnh thật của màn hình chừng đó lần rồi thu lại (viền thuỷ tinh mảnh bớt răng cưa, bớt lấp lánh; có tác dụng trên màn hình thường
+// và khi trình duyệt đang thu nhỏ trang). Vẫn bị chặn ở 2 lần điểm ảnh CSS như cũ. Mặc định 1 = như cũ. Không áp cho điện thoại.
+export function createStage(host, { leader = false, oversample = 1 } = {}) {
   const mobile = matchMedia('(max-width: 899px)').matches || navigator.maxTouchPoints > 1;
   QUALITY.mobile = mobile;
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   const FILM = /[?&]film=1/.test(location.search); // chế độ quay phim: không tự chạy, vẽ dày gấp ba để phóng to vẫn nét
-  const ratio = () => (FILM ? 3 : Math.min((window.devicePixelRatio || 1) * (window.__uiZoom || 1), 2)); // vẽ đủ điểm ảnh của màn hình, kể cả khi trang được phóng bằng CSS zoom
+  const ratio = () => (FILM ? 3 : Math.min((window.devicePixelRatio || 1) * (window.__uiZoom || 1) * (mobile ? 1 : oversample), 2)); // vẽ đủ điểm ảnh của màn hình, kể cả khi trang được phóng bằng CSS zoom
   renderer.setPixelRatio(ratio());
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.3;
@@ -35,21 +38,53 @@ export function createStage(host) {
   // ----- Máy quay tự lia tới khung cần nhìn -----
   let preset = null, goal = null, userMoved = false;
   const tmp = new THREE.Vector3();
+  // Vùng an toàn: phần khung KHÔNG bị bảng nổi che (tỉ lệ 0..1 tính từ mỗi mép). Mặc định 0 = cả khung, giữ nguyên cách cũ.
+  // Khi có vùng an toàn, khung cần nhìn được canh vừa và nằm giữa vùng đó (dời tâm chiếu, không đổi vị trí vật).
+  const ins = { l: 0, t: 0, r: 0, b: 0 };
+  let cy = 0.5; // điểm nhìn nằm ở đâu theo chiều dọc của vùng an toàn (0 = đỉnh, 1 = đáy); khung nhìn đặt bằng p.cy
+  function applyInsets() {
+    const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return;
+    const ox = ((ins.r - ins.l) / 2) * w, oy = (0.5 - ins.t - (1 - ins.t - ins.b) * cy) * h;
+    if (Math.abs(ox) > 0.5 || Math.abs(oy) > 0.5) camera.setViewOffset(w, h, ox, oy, w, h); else if (camera.view && camera.view.enabled) camera.clearViewOffset();
+  }
+  function setInsets(v = {}) {
+    const n = { l: v.l || 0, t: v.t || 0, r: v.r || 0, b: v.b || 0 };
+    if (['l', 't', 'r', 'b'].every((k) => Math.abs(n[k] - ins[k]) < 0.004)) return;
+    Object.assign(ins, n); applyInsets();
+    if (preset && !userMoved) focus(preset, !goal); // đang lia thì lia tiếp tới đích mới, đang đứng yên thì canh lại ngay
+  }
   function solve(p) {
-    const aspect = camera.aspect, t = Math.tan(THREE.MathUtils.degToRad(VFOV / 2));
-    const dist = Math.max((p.h / 2) / t, (p.w / 2) / (t * aspect)) * 1.04;
+    const fov = p.fov || VFOV; // khung nhìn có thể tự đặt góc mở ống kính (hẹp hơn = áp sát, ít méo)
+    const aspect = camera.aspect, t = Math.tan(THREE.MathUtils.degToRad(fov / 2));
+    const fw = Math.max(0.2, 1 - ins.l - ins.r), fh = Math.max(0.2, 1 - ins.t - ins.b);
+    const dist = Math.max((p.h / 2) / (t * fh), (p.w / 2) / (t * aspect * fw)) * 1.04;
     const az = THREE.MathUtils.degToRad(p.az || 0), el = THREE.MathUtils.degToRad(p.el ?? 16);
     const target = new THREE.Vector3(...p.target);
     const pos = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).multiplyScalar(dist).add(target);
-    return { pos, target, dist };
+    return { pos, target, dist, fov, cy: p.cy ?? 0.5 };
   }
+  // Giới hạn xoay tay quanh khung chuẩn (p.swing = số độ được xoay sang mỗi bên; p.elMin / p.elMax = góc ngẩng thấp nhất, cao nhất).
+  // Khung không khai swing thì giữ cách cũ: xoay đủ 360 độ. Đang lia thì thả giới hạn, tới nơi mới siết để máy quay không bị giật.
+  const D2R = THREE.MathUtils.degToRad;
+  let kept = null; // giới hạn có sẵn trước khi khung chuẩn siết (bài khác có thể tự đặt giới hạn riêng: không đụng tới)
+  const LIM = ['minAzimuthAngle', 'maxAzimuthAngle', 'minPolarAngle', 'maxPolarAngle'];
+  function limit(p, on) {
+    if (!on || !p || p.swing == null) { if (kept) { LIM.forEach((k) => { controls[k] = kept[k]; }); kept = null; } return; }
+    if (!kept) { kept = {}; LIM.forEach((k) => { kept[k] = controls[k]; }); }
+    const az = D2R(p.az || 0);
+    controls.minAzimuthAngle = az - D2R(p.swing); controls.maxAzimuthAngle = az + D2R(p.swing);
+    controls.minPolarAngle = D2R(90 - (p.elMax ?? 48)); controls.maxPolarAngle = D2R(90 - (p.elMin ?? 4));
+  }
+  let presetDist = 1, onMove = null;
+  const setMoved = (v) => { if (userMoved !== v) { userMoved = v; if (onMove) onMove(v); } };
   function focus(p, immediate = false) {
-    preset = p; userMoved = false;
-    const s = solve(p);
-    controls.minDistance = s.dist * 0.4; controls.maxDistance = Math.min(Math.max(s.dist * 1.6, 12), 16.5); // không lùi xuyên tường, tủ
-    if (immediate) { camera.position.copy(s.pos); controls.target.copy(s.target); goal = null; controls.update(); } else goal = s;
+    preset = p; setMoved(false);
+    const s = solve(p); presetDist = s.dist;
+    controls.minDistance = s.dist * 0.4; controls.maxDistance = Math.min(Math.max(s.dist * 1.6, 12), p.maxDist || 16.5); // không lùi xuyên tường, tủ (khung nhìn có thể tự nới bằng maxDist khi phòng trống)
+    limit(p, false);
+    if (immediate) { camera.position.copy(s.pos); controls.target.copy(s.target); camera.fov = s.fov; cy = s.cy; applyInsets(); camera.updateProjectionMatrix(); goal = null; limit(p, true); controls.update(); } else goal = s;
   }
-  controls.addEventListener('start', () => { goal = null; userMoved = true; });
+  controls.addEventListener('start', () => { if (goal) { goal = null; limit(preset, true); } setMoved(true); });
 
   // ----- Nhãn dụng cụ (HTML nổi trên cảnh) -----
   const tagLayer = document.createElement('div'); tagLayer.className = 'lk-tags'; host.appendChild(tagLayer);
@@ -60,6 +95,7 @@ export function createStage(host) {
     el.innerHTML = `<i style="background:${color}"></i><span></span>`;
     el.querySelector('span').textContent = text;
     if (onClick) el.addEventListener('click', () => onClick(id));
+    if (leader) { const ln = document.createElement('em'); ln.className = 'lk-lead'; el.appendChild(ln); el.style.setProperty('--c', color); }
     tagLayer.appendChild(el);
     tags.set(id, { el, anchor, visible: true });
     return el;
@@ -78,23 +114,24 @@ export function createStage(host) {
       if (!t.visible) { t.el.style.display = 'none'; return; }
       tmp.copy(t.anchor instanceof THREE.Vector3 ? t.anchor : t.anchor()).project(camera);
       const x = (tmp.x * 0.5 + 0.5) * w, y = (-tmp.y * 0.5 + 0.5) * h;
-      const on = tmp.z < 1 && x > 8 && x < w - 8 && y > 8 && y < h - 4;
+      const on = tmp.z < 1 && x > ins.l * w + 8 && x < w - ins.r * w - 8 && y > 8 && y < h - 4;
       t.el.style.display = on ? '' : 'none';
       if (on) list.push({ t, x, y });
     });
     // Nhãn không được chồng lên nhau: nhãn nào đụng nhãn đã đặt thì đẩy lên trên.
     list.sort((a, b) => b.y - a.y).forEach((o) => {
       const bw = o.t.el.offsetWidth || 90, bh = (o.t.el.offsetHeight || 24) + 4;
-      const cx = Math.min(Math.max(o.x, bw / 2 + 4), w - bw / 2 - 4);
-      let top = o.y - bh - 4;
+      const cx = Math.min(Math.max(o.x, ins.l * w + bw / 2 + 4), w - ins.r * w - bw / 2 - 4);
+      let top = o.y - bh - (leader ? 22 : 4);
       for (let i = 0; i < 6; i++) {
         const hit = placed.find((p) => Math.abs(p.cx - cx) < (p.bw + bw) / 2 + 4 && Math.abs(p.top - top) < bh);
         if (!hit) break;
         top = hit.top - bh;
       }
-      top = Math.max(2, top);
+      top = Math.max(ins.t * h + 2, top); // không chui lên vùng đã dành cho thẻ nổi ở đỉnh khung
       placed.push({ cx, top, bw });
       o.t.el.style.transform = `translate(${Math.round(cx - bw / 2)}px, ${Math.round(top)}px)`;
+      if (leader) { o.t.el.style.setProperty('--lead', Math.max(0, Math.round(o.y - (top + bh - 4))) + 'px'); o.t.el.style.setProperty('--dx', Math.round(Math.max(-bw / 2 + 8, Math.min(bw / 2 - 8, o.x - cx))) + 'px'); }
     });
   }
 
@@ -132,7 +169,7 @@ export function createStage(host) {
   const frames = [], after = []; let last = performance.now(), running = true;
   function resize() {
     const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return;
-    renderer.setPixelRatio(ratio()); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    renderer.setPixelRatio(ratio()); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); applyInsets();
     if (preset && !userMoved) focus(preset, true);
     if (FILM) { controls.update(); renderer.render(scene, camera); layoutTags(); } // đổi cỡ xoá khung vẽ: chế độ quay phim không có vòng tự vẽ nên vẽ lại ngay
   }
@@ -141,7 +178,9 @@ export function createStage(host) {
     if (goal) {
       const k = 1 - Math.exp(-dt * 4.5);
       camera.position.lerp(goal.pos, k); controls.target.lerp(goal.target, k);
-      if (camera.position.distanceTo(goal.pos) < 0.01) goal = null;
+      if (Math.abs(camera.fov - goal.fov) > 0.01) { camera.fov += (goal.fov - camera.fov) * k; camera.updateProjectionMatrix(); }
+      if (Math.abs(cy - goal.cy) > 0.001) { cy += (goal.cy - cy) * k; applyInsets(); }
+      if (camera.position.distanceTo(goal.pos) < 0.01 && Math.abs(camera.fov - goal.fov) < 0.05) { camera.fov = goal.fov; cy = goal.cy; applyInsets(); camera.updateProjectionMatrix(); goal = null; limit(preset, true); }
     }
     controls.update();
     frames.forEach((f) => f(dt));
@@ -158,8 +197,11 @@ export function createStage(host) {
   resize(); if (!FILM) requestAnimationFrame(tick);
 
   return {
-    setEnvironment, THREE, scene, camera, renderer, controls, mobile, focus, addTag, setTag, pickable, unpickable,
+    setEnvironment, THREE, scene, camera, renderer, controls, mobile, focus, setInsets, addTag, setTag, pickable, unpickable,
     onFrame: (f) => frames.push(f), onAfterRender: (f) => after.push(f), setHoverHandler: (f) => { onHover = f; }, hovered: () => hoverId, setPickHandler: (f) => { onPick = f; },
+    resetView: () => { if (preset) focus(preset); }, // lia về khung chuẩn của bước
+    setMoveHandler: (f) => { onMove = f; }, // báo khi người dùng tự xoay, phóng (true) và khi máy quay về khung chuẩn (false)
+    zoom: () => (goal ? 1 : camera.position.distanceTo(controls.target) / presetDist), // 1 = đúng khung chuẩn, lớn hơn 1 = đã lùi ra xa
     advance, // tiến một khoảng thời gian cho trước: dùng để kiểm thử và quay video
     renderOnce: () => advance(0),
   };
