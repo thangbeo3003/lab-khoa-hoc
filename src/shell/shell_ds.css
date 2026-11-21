@@ -324,3 +324,59 @@ html[data-ui="ds"] { --card:#fff; --good:#14624f; --good-soft:#e6f4ea; --bad:#b4
 .ds.is-v3 .lk-zm button:focus-visible { outline:2px solid var(--spark, #c1ff24); outline-offset:-2px; }
 .ds.is-v3 .lk-zm .lk-zm-pct { font-size:12.5px; min-width:44px; }
 .ds.is-v3 .lk-zm-hint { position:absolute; z-index:5; top:52px; right:calc(var(--safe-r, 0%) + 16px); padding:3px 9px; border-radius:999px; background:rgba(23,24,45,.72); color:#e9edf3; font-size:11.5px; line-height:16px; font-weight:600; pointer-events:none; white-space:nowrap; }
+
+/* ===== BẢN 3, lượt "KHÔNG ĐÈ DỤNG CỤ" (21/11): chỉ màn từ 900 px, điện thoại giữ nguyên. Mọi luật khoanh .ds.is-v3 ===== */
+.ds.is-v3 .lk-zmbar { display:contents; } /* dưới 900 px cụm không có khung riêng: thanh zoom, dòng nhắc, nút về góc chuẩn nằm như trước */
+@media (min-width:900px) {
+  /* (b) MỘT CỤM ở góc trên phải của phần cảnh không bị bảng che: dòng nhắc · "Về góc chuẩn" · thanh zoom, cùng một hàng trong dải đỉnh (nhãn dụng cụ không lên dải này) */
+  .ds.is-v3 .lk-zmbar { position:absolute; z-index:5; top:10px; right:calc(var(--safe-r, 0%) + 28px); display:flex; align-items:center; gap:8px; }
+  .ds.is-v3 .lk-zmbar .lk-zm, .ds.is-v3 .lk-zmbar .lk-zm-hint, .ds.is-v3 .lk-zmbar .lk-btn.lk-reset { position:static; }
+  .ds.is-v3 .lk-zmbar .lk-btn.lk-reset { min-height:0; height:31px; padding:0 12px; border-radius:10px; font-size:12.5px; white-space:nowrap; box-shadow:0 2px 10px rgba(0,0,0,.18); }
+  /* dòng báo (toast) dùng chung dải đỉnh: nằm bên trái cụm, chừa đúng bề ngang của cụm; lúc có dòng báo thì dòng nhắc kéo chuột tạm ẩn để nhường chỗ */
+  .ds.is-v3 .lk-toast { top:10px; left:calc(var(--safe-l, 0%) + 28px); right:calc(var(--safe-r, 0%) + 28px + var(--zmbar-w, 150px) + 12px); max-width:none; padding:6px 13px; border-radius:14px; font-size:12.5px; line-height:17px; }
+  .ds.is-v3 .lk-toast:not([hidden]) ~ .lk-zmbar .lk-zm-hint { display:none; }
+  /* (d) đã phóng từ 130% (lớp is-zoomed do labui.js đặt): thẻ phương trình thu thành MỘT DÒNG nhỏ ở đáy, bỏ dòng điều kiện, trả chỗ cho dụng cụ */
+  .ds.is-v3 .lk-stage.is-zoomed .lk-eqcard.is-bottom { flex-direction:row; align-items:baseline; gap:10px; bottom:8px; padding:4px 14px 5px; border-radius:999px; }
+  .ds.is-v3 .lk-stage.is-zoomed .lk-eqcard.is-bottom b { font-size:13px; line-height:20px; white-space:nowrap; }
+  .ds.is-v3 .lk-stage.is-zoomed .lk-eqcard.is-bottom em { display:none; }
+  /* (c) nhãn dụng cụ NÉ thân dụng cụ và né nhau: kit/labset.js chọn chỗ (trên, dưới, bên cạnh món) rồi đặt độ dời --ox/--oy và đường dẫn --lx/--ly/--len/--rot */
+  .ds.is-v3 .lk-tag.is-av { translate:var(--ox, 0px) var(--oy, 0px); }
+  .ds.is-v3 .lk-tag.is-av .lk-lead { left:var(--lx, 50%); top:var(--ly, 100%); height:var(--len, 0px); transform:rotate(var(--rot, 0rad)); transform-origin:0 0; }
+  /* (e) chữ trong hai bảng và chân trang không bị cắt: cho xuống dòng thay vì dấu ba chấm */
+  .ds.is-v3 .lk-ph { flex-wrap:wrap; row-gap:0; }
+  .ds.is-v3 .lk-ph span { white-space:normal; overflow:visible; }
+  .ds.is-v3 .lk-vl, .ds.is-v3 .lk-vv { white-space:normal; overflow:visible; }
+  .ds.is-v3 .lk-btext small { display:block; -webkit-line-clamp:unset; overflow:visible; }
+  .ds.is-v3 .lk-knob-h > span { white-space:normal; overflow:visible; }
+  .ds.is-v3 .lk-note { display:block; -webkit-line-clamp:unset; overflow:visible; }
+}
+@media (min-width:900px) and (max-width:1279px) { .ds.is-v3 .lk-zmbar .lk-zm-hint { display:none; } } /* màn hẹp: cụm chỉ còn nút và thanh zoom, lời nhắc vẫn có ở chú thích khi rê chuột */
+
+/* ===== BẢN 3, BỐ CỤC BA CỘT (chủ duyệt mockup 21/11, nguyên văn: "Duyệt, làm ba cột"). Từ 1200 px: cảnh 3D chỉ nằm ở CỘT GIỮA, hai bảng là hai cột riêng,
+   không còn nổi trên cảnh: phóng to, xoay, dời khung thế nào dụng cụ cũng không chui dưới bảng (ra ngoài thì bị cắt ở mép cảnh như mép cửa sổ).
+   900–1199 px (cột giữa quá hẹp) và điện thoại giữ bố cục cũ. Mọi luật khoanh .ds.is-v3: bản 1 và bản 2 không đổi. ===== */
+@media (min-width:1200px) {
+  .ds.is-v3 .lk-main { grid-template-columns:var(--col-l, var(--tuck-l)) minmax(0, 1fr) var(--col-r, var(--tuck-r)); grid-template-rows:minmax(0, 1fr) auto; row-gap:0; }
+  .ds.is-v3 .lk-main.is-tuck-l { --col-l:14px; } .ds.is-v3 .lk-main.is-tuck-r { --col-r:14px; } /* bảng thu gọn: cột còn một dải hẹp cho tay nắm, cảnh nới ra */
+  .ds.is-v3 .lk-stage { grid-column:2; grid-row:1; }
+  .ds.is-v3 .lk-card, .ds.is-v3 .lk-panel { grid-row:1 / -1; margin:0; align-self:stretch; max-height:none; }
+  .ds.is-v3 .lk-tuck.is-l { left:calc(16px + var(--tuck-l) - 8px); } .ds.is-v3 .lk-tuck.is-r { right:calc(16px + var(--tuck-r) - 8px); } /* tay nắm nằm giữa khe của bảng và cảnh */
+  .ds.is-v3 .lk-tuck.is-l.is-on { left:10px; } .ds.is-v3 .lk-tuck.is-r.is-on { right:10px; }
+  /* thẻ phương trình: một dải ngay dưới cảnh (labui.js dời thẻ ra khỏi cảnh và gắn lớp is-strip) */
+  .ds.is-v3 .lk-eqcard.is-strip { position:static; grid-column:2; grid-row:2; width:auto; max-width:none; margin:8px 0 0; flex-direction:row; flex-wrap:wrap; align-items:baseline; justify-content:center; gap:0 14px; padding:6px 16px 7px; border-radius:14px; background:#fff; box-shadow:none; }
+  .ds.is-v3 .lk-eqcard.is-strip b { font-size:17px; line-height:24px; white-space:normal; }
+}
+
+/* ===== BẢN 3: BẢNG KẾT QUẢ kẻ ô rõ (chủ 21/11, nguyên văn: "bảng kết quả cần kiểu rõ rệt hơn chia ô chia cột ra"). Khung ngoài, đường kẻ dọc giữa các cột,
+   đường kẻ ngang giữa các dòng, hàng tiêu đề có nền. Khoanh .ds.is-v3: bảng của bản 1 và bản 2 giữ nguyên. ===== */
+.ds.is-v3 .lk-panel table.lk-table { border-collapse:separate; border-spacing:0; margin-top:8px; border:1px solid #c9c7dc; border-radius:10px; overflow:hidden; }
+.ds.is-v3 .lk-panel .lk-table th, .ds.is-v3 .lk-panel .lk-table td { padding:6px 6px; border-bottom:1px solid #dcdbe8; border-left:1px solid #dcdbe8; text-align:right; vertical-align:top; overflow-wrap:anywhere; }
+.ds.is-v3 .lk-panel .lk-table th:first-child, .ds.is-v3 .lk-panel .lk-table td:first-child { border-left:0; text-align:left; }
+.ds.is-v3 .lk-panel .lk-table tbody tr:last-child td { border-bottom:0; }
+.ds.is-v3 .lk-panel .lk-table th { background:var(--accent-soft); color:var(--text); font-size:11.5px; line-height:15px; font-weight:650; vertical-align:bottom; border-bottom-color:#c9c7dc; }
+.ds.is-v3 .lk-panel .lk-table td { background:#fff; font-size:12.5px; line-height:17px; font-weight:600; color:var(--text); }
+.ds.is-v3 .lk-panel .lk-table td:first-child { font-weight:500; color:var(--text-secondary, #666878); }
+.ds.is-v3 .lk-panel .lk-table th:first-child { width:34%; } /* cột điều kiện đủ rộng để "20 mL H₂O₂" không vỡ thành ba dòng */
+.ds.is-v3 .lk-panel .lk-table td:not(:first-child) { white-space:nowrap; } /* con số và đơn vị không tách dòng ("68,8 mL") */
+.ds.is-v3 .lk-panel .lk-table tbody tr:nth-child(even) td { background:#f8f8fd; }
+

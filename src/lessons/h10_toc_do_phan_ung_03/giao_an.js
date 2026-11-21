@@ -267,9 +267,13 @@ export const lab = {
         },
         series(B) { const [e, r] = this.runs(B); return B.solo ? [{ run: r, color: '#475569', label: 'đá vôi viên' }] : [{ run: r, color: '#475569', label: 'viên' }, { run: e, color: '#6254f4', label: 'đập nhỏ' }]; },
         read(B) {
-          const [e, r] = this.runs(B), t = B.run ? Math.min(B.run.t, this.window(B)) : 0, go = !!B.run, ve = gasAt3(e, t), vr = gasAt3(r, t);
-          if (B.solo) return { label: 'Khí CO₂ trong xi-lanh', big: fmt(Math.min(vr, FULL), 1), unit: vr >= FULL ? 'mL (đầy)' : 'mL', cells: [['Đồng hồ', fmt(t, 1) + ' s'], ['Nửa khí sau', go && t >= r.tHalf ? fmtT(r.tHalf) : '–'], ['Tốc độ TB', go && t >= r.tHalf ? fmt(r.vEnd / 2 / r.tHalf, 2) + ' mL/s' : '–']] };
-          return { label: 'Khí CO₂ trong xi-lanh thí nghiệm (đập nhỏ)', big: fmt(Math.min(ve, FULL), 1), unit: ve >= FULL ? 'mL (đầy)' : 'mL', cells: [['Đồng hồ', fmt(t, 1) + ' s'], ['Đối chứng', fmt(Math.min(vr, FULL), 1) + ' mL'], ['Nửa khí sau', go && t >= e.tHalf ? fmtT(e.tHalf) : '–']] };
+          const [e, r] = this.runs(B), t = B.run ? Math.min(B.run.t, this.window(B)) : 0, go = !!B.run, ve = gasAt3(e, t), vr = gasAt3(r, t), { se, sr } = this.ends(B);
+          // Bình sẽ làm xi-lanh đầy trong giờ đo thì KHÔNG có "nửa lượng khí" để đọc (lượng khí cuối vượt 100 mL): thẻ để trống tới lúc đầy, rồi ghi thời điểm đầy.
+          // Tốc độ trung bình khi đó tính trên 100 mL và thời gian tới lúc đầy, khớp với kết luận bước Thước đo.
+          const mid = (run, s) => (s.state === 'full' ? (go && t >= s.at ? ['Khí đầy sau', fmtT(s.at)] : ['Nửa khí sau', '–']) : ['Nửa khí sau', go && t >= run.tHalf ? fmtT(run.tHalf) : '–']);
+          if (B.solo) return { label: 'Khí CO₂ trong xi-lanh', big: fmt(Math.min(vr, FULL), 1), unit: vr >= FULL ? 'mL (đầy)' : 'mL', cells: [['Đồng hồ', fmt(t, 1) + ' s'], mid(r, sr),
+            ['Tốc độ TB', sr.state === 'full' ? (go && t >= sr.at ? fmt(FULL / sr.at, 2) + ' mL/s' : '–') : go && t >= r.tHalf ? fmt(r.vEnd / 2 / r.tHalf, 2) + ' mL/s' : '–']] };
+          return { label: 'Khí CO₂ trong xi-lanh thí nghiệm (đập nhỏ)', big: fmt(Math.min(ve, FULL), 1), unit: ve >= FULL ? 'mL (đầy)' : 'mL', cells: [['Đồng hồ', fmt(t, 1) + ' s'], ['Đối chứng', fmt(Math.min(vr, FULL), 1) + ' mL'], mid(e, se)] };
         },
       } },
 

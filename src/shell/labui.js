@@ -79,7 +79,16 @@ export function resultTable(rows, cols) {
 // Trả về hàm sync() để gọi lại khi thẻ đổi cỡ.
 export function bindSafeArea(shell, stage, bottom = () => 0) {
   const wide = matchMedia('(min-width:900px)'), el = shell.els.stage;
+  // BA CỘT (bản 3, từ 1200 px; chủ duyệt mockup 21/11): cảnh chỉ nằm ở cột giữa nên không còn bảng nào nằm trên cảnh (shell_ds.css). Thẻ phương trình rời khỏi cảnh,
+  // thành một dải ngay dưới cảnh (lớp is-strip); dưới 1200 px thẻ trở lại nằm trong cảnh như trước. Bản 2 không có lớp is-v3 nên không đổi gì.
+  const cols = matchMedia('(min-width:1200px)'), main = el.parentElement, v3 = !!el.closest('.ds.is-v3');
+  function placeEq() {
+    const eq = v3 && main.querySelector('.lk-eqcard'); if (!eq) return false;
+    const out = cols.matches; if (out !== (eq.parentElement === main)) { (out ? main : el).append(eq); eq.classList.toggle('is-strip', out); }
+    return out;
+  }
   function sync() {
+    const eqOut = placeEq(); // thẻ phương trình đang nằm ngoài cảnh thì cảnh không phải chừa đáy cho thẻ
     const s = el.getBoundingClientRect(); if (!s.width || !s.height) return;
     let l = 0, r = 0;
     if (wide.matches) [shell.els.card, shell.els.panel].forEach((box) => {
@@ -88,13 +97,20 @@ export function bindSafeArea(shell, stage, bottom = () => 0) {
       if (b.left - s.left < s.right - b.right) l = Math.max(l, (b.right - s.left) / s.width); else r = Math.max(r, (s.right - b.left) / s.width);
     });
     el.style.setProperty('--safe-l', (l * 100).toFixed(2) + '%'); el.style.setProperty('--safe-r', (r * 100).toFixed(2) + '%');
-    const px = bottom(), e = px ? Math.min(0.26, Math.ceil(((px + 22) / el.clientHeight) * 25) / 25) : 0.03; // làm tròn lên theo nấc 4%: thẻ ở đáy đổi cao vài điểm ảnh thì khung hình không nhúc nhích
-    last = { l: l ? l + 0.01 : 0, r: r ? r + 0.01 : 0, t: 0.07, b: e };
+    // Đang phóng to (lớp is-zoomed do zoomBox đặt) thì thẻ ở đáy thu gọn: giữ nguyên phần đáy đã dành, để khung hình không giật khi thẻ đổi cỡ
+    const zoomed = !eqOut && el.classList.contains('is-zoomed') && last.b, px = zoomed || eqOut ? 0 : bottom();
+    const e = zoomed ? last.b : px ? Math.min(0.26, Math.ceil(((px + 22) / el.clientHeight) * 25) / 25) : 0.03; // làm tròn lên theo nấc 4%: thẻ ở đáy đổi cao vài điểm ảnh thì khung hình không nhúc nhích
+    // Lề bên cạnh bảng nổi: SIDE điểm ảnh (tay nắm thu gọn thò ra 13 px + khoảng thở), để món ở mép bàn (lọ hoá chất phải chạm đầu tiên) không nằm sát hay chui dưới bảng.
+    // Đỉnh: dải TOP điểm ảnh dành cho cụm zoom và dòng báo; nhãn dụng cụ không lên dải này.
+    const side = SIDE / s.width;
+    last = { l: l ? l + side : 0, r: r ? r + side : 0, t: Math.max(0.07, TOP / el.clientHeight), b: e };
+    stage.insets = last; // kit/labset.js đọc để xếp nhãn dụng cụ trong đúng phần cảnh không bị che
     stage.setInsets(last);
   }
+  const SIDE = 28, TOP = 48;
   let last = { l: 0, r: 0, t: 0, b: 0 }; sync.insets = () => ({ ...last }); // vùng an toàn hiện tại, để cắt ảnh chụp cảnh cho đúng phần không bị thẻ che
   const ro = new ResizeObserver(sync); [el, shell.els.card, shell.els.panel].forEach((x) => ro.observe(x));
-  wide.addEventListener('change', sync);
+  wide.addEventListener('change', sync); cols.addEventListener('change', sync);
   return sync;
 }
 
@@ -105,7 +121,7 @@ export function tuckHandles(shell, onChange = () => {}) {
   const mk = (side, box, name) => {
     const b = h('button', { class: 'lk-tuck is-' + side, type: 'button', onclick: () => set(!box.classList.contains('is-tucked')) });
     function set(on) {
-      box.classList.toggle('is-tucked', on); b.classList.toggle('is-on', on); b.textContent = (side === 'l') === on ? '›' : '‹';
+      box.classList.toggle('is-tucked', on); b.classList.toggle('is-on', on); main.classList.toggle('is-tuck-' + side, on); // lớp trên khung chính: bố cục ba cột thu cột đó thành dải hẹp b.textContent = (side === 'l') === on ? '›' : '‹';
       const t = (on ? 'Mở bảng ' : 'Thu gọn bảng ') + name; b.title = t; b.setAttribute('aria-label', t); b.setAttribute('aria-expanded', String(!on)); onChange();
     }
     set(false); main.append(b); return set;
@@ -121,11 +137,20 @@ export function zoomBox(lab, host) {
     h('button', { type: 'button', 'aria-label': 'Thu nhỏ', title: 'Thu nhỏ', onclick: () => lab.zoomBy(1 / 1.35) }, '−'), pct,
     h('button', { type: 'button', 'aria-label': 'Phóng to', title: 'Phóng to', onclick: () => lab.zoomBy(1.35) }, '+'));
   const hint = h('span', { class: 'lk-zm-hint' }); // kéo chuột lúc này làm gì: đổi theo mức zoom
-  host.append(box, hint);
+  // MỘT CỤM ở góc trên phải của phần cảnh không bị bảng che (21/11): dòng nhắc · nút "Về góc chuẩn" · thanh zoom, nằm gọn trong dải đỉnh mà nhãn dụng cụ không lên tới.
+  // Nút "Về góc chuẩn" do bài học tạo sẵn trong cảnh (lớp lk-reset): chỉ dời nó vào cụm, bài học vẫn tự bật tắt như cũ. Dưới 900 px cụm không có khung riêng (display: contents), ba món nằm như trước.
+  const bar = h('div', { class: 'lk-zmbar' }, hint, box), reset = host.querySelector('.lk-reset');
+  if (reset) { reset.title = 'Về khung chuẩn của bàn đang xem'; bar.insertBefore(reset, box); }
+  host.append(bar);
+  const sizeBar = () => host.style.setProperty('--zmbar-w', bar.offsetWidth + 'px'); // dòng báo ở đỉnh cảnh chừa đúng bề ngang của cụm
+  new ResizeObserver(sizeBar).observe(bar); sizeBar();
   let shown = '', mode = '';
   lab.stage.onFrame(() => {
     const t = lab.zoomPct() + '%'; if (t !== shown) { shown = t; pct.textContent = t; }
-    const m = lab.dragMode(); if (m !== mode) { mode = m; hint.textContent = m === 'pan' ? 'Kéo để dời khung · Shift + kéo để xoay' : 'Kéo để xoay · cuộn để phóng to'; }
+    const m = lab.dragMode(); if (m !== mode) {
+      mode = m; hint.textContent = m === 'pan' ? 'Kéo để dời khung · Shift + kéo để xoay' : 'Kéo để xoay · cuộn để phóng to';
+      host.classList.toggle('is-zoomed', m === 'pan'); // đã phóng từ 130%: thẻ phương trình ở đáy thu thành một dòng (shell_ds.css), trả chỗ cho dụng cụ
+    }
   });
   host.addEventListener('selectstart', (e) => e.preventDefault()); // kéo xoay cảnh không bôi đen chữ ở hai bảng bên cạnh
   return box;

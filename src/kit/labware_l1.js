@@ -60,7 +60,9 @@ export function makeTimer() {
     const c = cv.getContext('2d');
     c.fillStyle = '#dfe8dc'; c.fillRect(0, 0, 384, 192);
     c.fillStyle = '#14181c'; c.textAlign = 'right'; c.textBaseline = 'middle';
-    c.font = `700 124px ${FONT}`; c.fillText(t, 300, 104);
+    // Số dài (từ 100,0 s: lần đo dài nhất của bàn Bề mặt là 260,0 s) rộng hơn mặt số: thu cỡ chữ cho vừa, chừa 14 px ở mép trái. Số ngắn vẫn cỡ 124 như trước.
+    let fs = 124; c.font = `700 ${fs}px ${FONT}`; const wd = c.measureText(t).width; if (wd > 286) { fs = Math.floor((fs * 286) / wd); c.font = `700 ${fs}px ${FONT}`; }
+    c.fillText(t, 300, 104);
     c.font = `600 56px ${FONT}`; c.textAlign = 'left'; c.fillText('s', 312, 122);
     tex.needsUpdate = true;
   };

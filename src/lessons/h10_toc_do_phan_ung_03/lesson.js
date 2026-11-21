@@ -182,11 +182,12 @@ export function createLesson(shell) {
       case 4: {
         // Kết luận viết từ lần chạy "sạch" gần nhất (đá tan hết, xi-lanh không đầy, cả hai bình xong trong giờ đo); chưa có thì dùng số của mức bài.
         const last = latest(4), E = run3('vun', REF3.mass, REF3.vAcid), R = run3('vien', REF3.mass, REF3.vAcid);
-        const r = latest(4, (x) => !x.over && !x.left && !x.slow) || { te: E.tHalf, tr: R.tHalf, vEnd: R.vEnd, cond: `${g2(REF3.mass)} · ${REF3.vAcid} mL` };
+        const mine = latest(4, (x) => !x.over && !x.left && !x.slow), r = mine || { te: E.tHalf, tr: R.tHalf, vEnd: R.vEnd, cond: `${g2(REF3.mass)} · ${REF3.vAcid} mL` };
+        const head = mine ? `Mỗi bình ${r.cond} acid: ` : `Ở mức của bài (mỗi bình ${r.cond} acid), mô hình tính ra: `; // chưa có lần chạy sạch thì nói rõ đây là số của mức bài, không phải số em vừa đo
         const extra = last && last.over ? ' Lần em vừa làm, xi-lanh đầy ở 100 mL nên không đọc được lượng khí cuối: dụng cụ đo cũng có giới hạn.'
           : last && last.slow ? ` Lần em vừa làm (${last.cond}), hết giờ đo mà khí vẫn còn ra chậm: càng về cuối đá vôi và acid đều vơi nên phản ứng chậm dần.`
             : last && last.left ? ' Lần em vừa làm, acid hết trước nên đá vôi còn thừa và lượng khí do acid quyết định.' : '';
-        return [`Mỗi bình ${r.cond} acid: đá vôi đập nhỏ thu nửa lượng khí sau ${fmtT(r.te)}, đá vôi viên sau ${fmtT(r.tr)}, nhanh gấp ${k(r.tr, r.te)} lần. Hai xi-lanh vẫn dừng ở cùng khoảng ${fmt(r.vEnd, 0)} mL. Diện tích bề mặt tiếp xúc càng lớn thì tốc độ càng lớn.` + extra, ['Nhanh hơn không có nghĩa là nhiều hơn: cùng số gam đá vôi thì cùng lượng khí.', 'Muốn nhiều khí hơn thì phải cân nhiều đá vôi hơn (và đủ acid): rửa bình, đổi con số rồi thử lại.', 'Chỉ lớp ngoài của chất rắn chạm được dung dịch.'], 'không trả lời được câu bột mì, và giữ nguyên hiểu lầm "nhanh thì nhiều".'];
+        return [head + `đá vôi đập nhỏ thu nửa lượng khí sau ${fmtT(r.te)}, đá vôi viên sau ${fmtT(r.tr)}, nhanh gấp ${k(r.tr, r.te)} lần. Hai xi-lanh vẫn dừng ở cùng khoảng ${fmt(r.vEnd, 0)} mL. Diện tích bề mặt tiếp xúc càng lớn thì tốc độ càng lớn.` + extra, ['Nhanh hơn không có nghĩa là nhiều hơn: cùng số gam đá vôi thì cùng lượng khí.', 'Muốn nhiều khí hơn thì phải cân nhiều đá vôi hơn (và đủ acid): rửa bình, đổi con số rồi thử lại.', 'Chỉ lớp ngoài của chất rắn chạm được dung dịch.'], 'không trả lời được câu bột mì, và giữ nguyên hiểu lầm "nhanh thì nhiều".'];
       }
       case 5: {
         // Không viết thời gian chờ khi không có MnO₂: hằng số tốc độ của bình đối chứng là số minh hoạ, chưa có nguồn (facts.md). Chỉ nói điều xi-lanh cho thấy trong giờ đo.

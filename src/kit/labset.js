@@ -9,7 +9,7 @@ import { createStage } from './stage.js';
 import { makeRoom, makeIsland } from './room.js';
 import { QUALITY, PAL, solidMat, liquidMat } from './materials.js';
 import { makeFlask, makeTestTube, makeBottle, makeWatchGlass, makeSolid, makeHotplate, makeTube } from './labware.js';
-import { makeSchoolRack, makeAlcoholLamp, makeDropperBottle, makeSpatula, makeChemSolid, makeTubeHolder, makeWashBottle } from './labware2.js';
+import { makeSchoolRack, makeAlcoholLamp, makeDropperBottle, makeSpatula, makeChemSolid, makeTubeHolder, makeWashBottle, makeBeaker } from './labware2.js';
 import { makeXPaper, makeTimer, makeFocusRing, makeParticleLens, makeGasSyringe, makeSink, makeThermometer, makePost, makeMeasuringCylinder, makeBalance, makeStool, makeCoatStand, makeTrolley, makeParticleTV } from './labware_l1.js';
 import { Bubbles } from './fx.js';
 
@@ -162,13 +162,22 @@ export function createLab(host, decl) {
       (it.in ? B.items[it.in].obj : g).add(obj);
       const touch = !!K.r && it.pick !== false, item = { id: it.id, kind: it.kind, K, obj, home: pos.clone(), spec: it, touch, pickOn: touch };
       B.items[it.id] = item;
+      if (it.kind === 'spatula') { // chủ 21/11 ("thìa k ai để ở bàn cả"): thìa không nằm trên mặt bàn mà cắm trong một cốc thuỷ tinh khô: lòng thìa ở đáy cốc, cán tựa miệng cốc
+        const dir = V3(Math.cos(it.ry || 0), 0, -Math.sin(it.ry || 0)), cup = makeBeaker(); // dir: hướng cán thìa trên mặt bàn
+        cup.position.copy(pos).addScaledVector(dir, 0.13); cup.rotation.y = (it.ry || 0) + Math.PI; g.add(cup); stage.pickable(cup, d.id + '/' + it.id); // mỏ cốc quay về phía ngược cán
+        item.home.y = 0.045; item.up = item.home.clone().setY(0.95); item.rest = 1.05; obj.position.copy(item.home); obj.rotation.z = item.rest; // up: điểm nhấc thìa ra khỏi cốc; rest: góc dựng cán (rad)
+        updaters.push((dt) => { // ở trong cốc thì cán dựng lên; mang đi thì thìa ngả gần ngang để giữ bột
+          const dx = obj.position.x - item.home.x, dz = obj.position.z - item.home.z, goal = dx * dx + dz * dz < 0.0025 ? item.rest : 0.3;
+          if (obj.rotation.z !== goal) { obj.rotation.z += (goal - obj.rotation.z) * Math.min(1, dt * 10); if (Math.abs(goal - obj.rotation.z) < 0.004) obj.rotation.z = goal; }
+        });
+      }
       if (K.vessel) B.vessel[it.id] = makeVessel(item);
       if (touch) { stage.pickable(obj, d.id + '/' + it.id); const ring = put(makeFocusRing(d.color, K.r), pos.x, 0.014, pos.z); g.add(ring); B.rings[it.id] = ring; }
       if (it.tag) {
-        const off = it.tagAt ? V3(...it.tagAt) : V3(0, K.top || 1, 0), w = V3(), id = d.id + '/' + it.id;
+        const off = it.tagAt ? V3(...it.tagAt) : item.rest ? V3(Math.cos(it.ry || 0) * 0.5, 1.5, -Math.sin(it.ry || 0) * 0.5) : V3(0, K.top || 1, 0), w = V3(), id = d.id + '/' + it.id; // thìa dựng trong cốc: nhãn ở phía trên cán
         const el = stage.addTag(id, it.tag, () => obj.getWorldPosition(w).add(off), { color: d.color, onClick: touch ? () => hand(B, it.id) : undefined });
         el.classList.add('is-part'); if (!touch) el.tabIndex = -1;
-        B.tags.push([id, it.id]); B.tagEls[it.id] = el;
+        B.tags.push([id, it.id]); B.tagEls[it.id] = el; item.tagOff = off;
       }
       if (K.tick) updaters.push((dt) => obj.userData.update(dt));
       if (it.kind === 'lamp') { let tt = 0; updaters.push((dt) => { tt += dt; obj.userData.flicker(tt); }); }
@@ -190,7 +199,7 @@ export function createLab(host, decl) {
     Object.values(B.items).forEach((it) => {
       const U = it.obj.userData;
       if (!it.K.vessel) it.obj.position.copy(it.home);
-      if (it.kind === 'spatula') it.obj.rotation.x = 0;
+      if (it.kind === 'spatula') { it.obj.rotation.x = 0; if (it.rest) it.obj.rotation.z = it.rest; }
       if (it.kind === 'bottle' || it.kind === 'jar' || it.kind === 'dropper') { it.obj.rotation.z = 0; U.cap.visible = true; if (U.shadow) U.shadow.visible = true; }
       if (it.kind === 'dish') { U.setContent(true); U.holder.scale.setScalar(1); }
       if (it.kind === 'cylinder') { it.obj.rotation.x = 0; U.setVolume(0); }
@@ -327,11 +336,15 @@ export function createLab(host, decl) {
       if (!!o.v === B.loaded) return [];
       const tool = B.items[s.tool], T = tool.obj, jar = B.items[s.item], U = jar.obj.userData, top = jar.obj.position.clone().add(V3(0, jar.K.top + 0.3, 0)), dip = top.clone().add(V3(0, -0.5, 0));
       const arc = (p, q) => (k) => { T.position.lerpVectors(p, q, k); T.position.y += Math.sin(Math.PI * k) * 0.25; };
+      // Thìa cắm trong cốc (tool.up): nhấc thẳng lên khỏi cốc rồi mới đi, lúc về thì hạ thẳng xuống cốc
+      const park = tool.up || tool.home, lift = tool.up ? [{ dur: 0.25, fn: (k) => T.position.lerpVectors(tool.home, tool.up, k) }] : [], lower = tool.up ? [{ dur: 0.25, fn: (k) => T.position.lerpVectors(tool.up, tool.home, k) }] : [];
       return [
-        { dur: 0.6, start() { U.cap.visible = false; }, fn: arc(tool.home, top) },
+        ...lift,
+        { dur: 0.6, start() { U.cap.visible = false; }, fn: arc(park, top) },
         { dur: 0.3, fn: (k) => T.position.lerpVectors(top, dip, k) },
         { dur: 0.3, start() { T.userData.holder.clear(); if (o.v) { const p = makeChemSolid(s.powder || 'MnO2'); p.scale.set(0.55, 0.9, 0.3); T.userData.holder.add(p); } B.loaded = !!o.v; }, fn: (k) => T.position.lerpVectors(dip, top, k) },
-        { dur: 0.6, fn: arc(top, tool.home) },
+        { dur: 0.6, fn: arc(top, park) },
+        ...lower,
         { dur: 0.02, fn: () => { U.cap.visible = true; } },
       ];
     },
@@ -342,12 +355,15 @@ export function createLab(host, decl) {
         const tool = B.items[s.tool], T = tool.obj, v = B.vessel[s.into], m = v.mouth().add(V3(0, 0.22, 0)), bottom = v.o.position.y + 0.1;
         const grain = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), solidMat(0x1c1c1e, 1)); grain.visible = false; B.g.add(grain);
         const arc = (p, q) => (k) => { T.position.lerpVectors(p, q, k); T.position.y += Math.sin(Math.PI * k) * 0.4; };
+        const park = tool.up || tool.home;
+        if (tool.up) seq.push({ dur: 0.25, fn: (k) => T.position.lerpVectors(tool.home, tool.up, k) });
         seq.push(
-          { dur: 0.7, fn: arc(tool.home, m) },
+          { dur: 0.7, fn: arc(park, m) },
           { dur: 0.3, fn: (k) => { T.rotation.x = 1.2 * k; } },
           { dur: 0.4, ease: (k) => k * k, start() { T.userData.holder.clear(); B.loaded = false; grain.visible = true; }, fn: (k) => grain.position.set(m.x, m.y + (bottom - m.y) * k, m.z) },
           { dur: 0.3, start() { B.g.remove(grain); v.powder.visible = true; }, fn: (k) => { T.rotation.x = 1.2 * (1 - k); } },
-          { dur: 0.6, fn: arc(m, tool.home) });
+          { dur: 0.6, fn: arc(m, park) });
+        if (tool.up) seq.push({ dur: 0.25, fn: (k) => T.position.lerpVectors(tool.up, tool.home, k) });
       }
       if (rigs.length) seq.push({ dur: 0.5, fn: (k) => rigs.forEach((r) => r.setOpen(1 - k)) });
       return seq.length ? seq : [{ dur: 0.05 }];
@@ -461,18 +477,168 @@ export function createLab(host, decl) {
   stage.setPickHandler((id) => { const [b, it] = String(id).split('/'); const B = benches[b]; if (!B) return; if (it && active === b) hand(B, it); else if (cb.pick) cb.pick(b); });
   stage.setHoverHandler(() => {}); // để con trỏ đổi thành bàn tay khi rê lên món chạm được
 
+  // ---------- NHÃN NÉ DỤNG CỤ (21/11; chủ: nhãn món sau không đè món trước, chữ không đè hình). Chỉ màn từ 900 px, chỉ bàn đang xem. ----------
+  // stage.js vẫn đặt nhãn ngay trên điểm neo (đỉnh món), không sửa gì ở đó nên bản 1 và bản 2 không đổi. Ở đây mỗi khung hình đo lại: chỗ đó có nằm trên thân
+  // một dụng cụ, trên nhãn khác hay trên thẻ ở đáy không; có thì thử các chỗ khác quanh món (dưới chân món, cao hơn, chếch hai bên) và lấy chỗ che dụng cụ ít nhất.
+  // Kết quả ghi lên nhãn thành độ dời --ox/--oy và đường dẫn --lx/--ly/--len/--rot (shell_ds.css, lớp is-av). Chỗ đang dùng được ưu tiên giữ để nhãn không nhảy qua lại.
+  const WIDE = matchMedia('(min-width:900px)'), AV = { boxes: new Map(), keep: {}, age: 0, on: false, eq: null }, BX = new THREE.Box3(), PV = V3();
+  const toScreen = (v, w, h) => { PV.copy(v).project(stage.camera); return [(PV.x * 0.5 + 0.5) * w, (-PV.y * 0.5 + 0.5) * h]; };
+  // Hộp bao của từng phần của một món, tính so với gốc của món (đo lại sau mỗi 1,5 giây: ảnh dụng cụ tải xong, nắp vừa mở...). Bỏ phần dẹt sát mặt bàn (bóng đổ).
+  const partBoxes = (it) => {
+    let c = AV.boxes.get(it); if (c) return c;
+    const o = it.obj, p = o.getWorldPosition(V3()); c = []; o.updateWorldMatrix(true, true);
+    o.children.forEach((ch) => { if (!ch.visible) return; BX.setFromObject(ch); if (BX.isEmpty() || BX.max.y - BX.min.y < 0.05) return; c.push([BX.min.clone().sub(p), BX.max.clone().sub(p)]); });
+    AV.boxes.set(it, c); return c;
+  };
+  const boxRect = (p, a, b, w, h) => {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      PV.set(p.x + (i & 1 ? b.x : a.x), p.y + (i & 2 ? b.y : a.y), p.z + (i & 4 ? b.z : a.z)).project(stage.camera); if (PV.z > 1) return null;
+      const x = (PV.x * 0.5 + 0.5) * w, y = (-PV.y * 0.5 + 0.5) * h; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    return [x0, y0, x1, y1];
+  };
+  const overlap = (l, t, r, b, o) => Math.max(0, Math.min(r, o[2]) - Math.max(l, o[0])) * Math.max(0, Math.min(b, o[3]) - Math.max(t, o[1]));
+  function avoidTags(dt) {
+    const B = active && benches[active], on = !!B && names && WIDE.matches && B.tags.length > 0;
+    if (!on) { if (AV.on) { AV.on = false; list.forEach((b) => Object.values(b.tagEls).forEach((el) => el.classList.remove('is-av'))); } return; }
+    const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return;
+    AV.on = true; AV.age += dt; if (AV.age > 1.5 && !B.seq.busy()) { AV.age = 0; AV.boxes.clear(); }
+    const ins = stage.insets || { l: 0, r: 0, t: 0.07, b: 0 }, X0 = ins.l * w + 4, X1 = w - ins.r * w - 4, Y0 = ins.t * h + 2, Y1 = h - 4;
+    const obs = []; // vật cản: hộp bao trên màn hình của từng phần của từng món đang hiện trên bàn
+    Object.values(B.items).forEach((it) => { if (!it.obj.visible) return; const p = it.obj.getWorldPosition(V3()); partBoxes(it).forEach(([a, b]) => { const r = boxRect(p, a, b, w, h); if (r) { r.push(it.id); obs.push(r); } }); });
+    AV.eq = AV.eq || host.querySelector('.lk-eqcard'); // thẻ phương trình ở đáy cảnh: nhãn không nằm lên thẻ
+    const eq = AV.eq && !AV.eq.hidden && host.contains(AV.eq) ? [ /* bố cục ba cột: thẻ nằm ngoài cảnh thì không còn là vật cản */AV.eq.offsetLeft - 6, AV.eq.offsetTop - 6, AV.eq.offsetLeft + AV.eq.offsetWidth + 6, h] : null;
+    const todo = [];
+    B.tags.forEach(([, itemId]) => {
+      const el = B.tagEls[itemId], it = B.items[itemId]; if (el.style.display === 'none') return;
+      const m = /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(el.style.transform); if (!m) return;
+      const p = it.obj.getWorldPosition(V3()), base = toScreen(p, w, h), top = toScreen(p.add(it.tagOff), w, h);
+      todo.push({ el, id: itemId, X: +m[1], Y: +m[2], bw: el.offsetWidth, th: el.offsetHeight, ax: top[0], ay: top[1], bx: base[0], by: base[1] });
+    });
+    const placed = [];
+    todo.sort((a, b) => b.ay - a.ay).forEach((t) => {
+      const { ax, ay, bx, by, bw, th } = t, up = ay - 22 - th, sx = bw / 2 + 14, cs = [];
+      const add = (cx, top, A, pen) => cs.push({ l: clamp(cx - bw / 2, X0, Math.max(X0, X1 - bw)), t: Math.max(Y0, top), A, pen });
+      add(ax, up, [ax, ay], 0); // 0: ngay trên món (chỗ quen thuộc)
+      add(bx, by + 16, [bx, by], 300); add(bx, by + 36, [bx, by], 420); // 1, 2: dưới chân món
+      add(ax, up - (th + 8), [ax, ay], 360); add(ax, up - 2 * (th + 8), [ax, ay], 520); // 3, 4: cao hơn
+      add(ax - sx, up, [ax, ay], 380); add(ax + sx, up, [ax, ay], 380); // 5, 6: chếch trên trái, phải
+      add(ax - sx - 12, ay - th / 2 - 4, [ax, ay], 460); add(ax + sx + 12, ay - th / 2 - 4, [ax, ay], 460); // 7, 8: ngang hai bên điểm neo
+      add(bx - sx, by + 20, [bx, by], 500); add(bx + sx, by + 20, [bx, by], 500); // 9, 10: chếch dưới
+      add(ax - sx, up - (th + 8), [ax, ay], 600); add(ax + sx, up - (th + 8), [ax, ay], 600); // 11, 12: chếch trên, cao hơn
+      const key = B.id + '/' + t.id, prev = AV.keep[key]; let best = 0, bk = Infinity;
+      cs.forEach((c, i) => {
+        const l = c.l, tp = c.t, r = l + bw, b = tp + th; let k = c.pen - (i === prev ? 260 : 0);
+        if (b > Y1) k += 1e6;
+        placed.forEach((q) => { const a = overlap(l - 4, tp - 4, r + 4, b + 4, q); if (a) k += 2e5 + a; });
+        if (eq) { const a = overlap(l, tp, r, b, eq); if (a) k += 1e5 + a; }
+        const per = {}; obs.forEach((o) => { const a = overlap(l + 2, tp + 2, r - 2, b - 2, o); if (a > (per[o[4]] || 0)) per[o[4]] = a; }); // mỗi món tính phần bị che lớn nhất
+        for (const id in per) k += per[id];
+        if (k < bk) { bk = k; best = i; }
+      });
+      AV.keep[key] = best;
+      const c = cs[best], l = c.l, tp = c.t, r = l + bw, b = tp + th, [qx, qy] = c.A; placed.push([l, tp, r, b]);
+      // Đường dẫn: từ mép nhãn gần điểm neo nhất tới điểm neo (đỉnh món khi nhãn ở trên hoặc bên cạnh, chân món khi nhãn ở dưới)
+      let px, py;
+      if (qy >= b) { px = clamp(qx, l + 10, r - 10); py = b; } else if (qy <= tp) { px = clamp(qx, l + 10, r - 10); py = tp; } else { px = qx < l ? l : r; py = clamp(qy, tp + 5, b - 5); }
+      const inside = qx > l && qx < r && qy > tp && qy < b, vx = qx - px, vy = qy - py;
+      const css = `${Math.round(l - t.X)}|${Math.round(tp - t.Y)}|${Math.round(px - l - 1)}|${Math.round(py - tp - 1)}|${inside ? 0 : Math.round(Math.hypot(vx, vy))}|${Math.atan2(-vx, vy).toFixed(3)}`;
+      if (t.el._av !== css) {
+        t.el._av = css; const v = css.split('|'), s = t.el.style;
+        s.setProperty('--ox', v[0] + 'px'); s.setProperty('--oy', v[1] + 'px'); s.setProperty('--lx', v[2] + 'px'); s.setProperty('--ly', v[3] + 'px'); s.setProperty('--len', v[4] + 'px'); s.setProperty('--rot', v[5] + 'rad');
+      }
+      t.el.classList.add('is-av');
+    });
+  }
+
+  // ---------- KHUNG TỰ CANH THEO BỘ DỤNG CỤ (21/11; chủ: "từng set trong bàn thí nghiệm bị 2 bảng info che, góc xoay gần như vẫn bị che") ----------
+  // Trước đây khung của một bàn canh theo bề ngang w đặt tay trong giáo án và chỉ đúng ở góc nhìn thẳng: món nằm ngoài w (cân, bình tia, vòi nước ở bước một bình)
+  // chui dưới bảng phải; xoay sang bên thì đầu bàn gần máy quay phình ra, lại lọt dưới bảng. Giờ khung chuẩn được GIẢI từ hộp bao thật của mọi món đang hiện trên bàn:
+  // máy quay đứng ở chỗ gần nhất mà mọi góc hộp vẫn nằm trong phần cảnh không bị bảng che (stage.insets), ở đúng hướng đang nhìn. Người dùng xoay thì giải lại
+  // mỗi khung hình, nên xoay góc nào bộ dụng cụ cũng nằm giữa hai bảng. Tự phóng to hoặc dời khung (cuộn, nút +, Shift + kéo) thì thôi canh, tới khi về khung chuẩn.
+  // Chỉ màn từ 900 px (màn hẹp không có bảng nổi). Giáo án vẫn quyết hướng nhìn (az, el), ống kính (fov) và chiều cao khung (h).
+  const FIT = { on: false, pend: 0, moved: false, sig: '', ref: 0, pts: [], ext: [], age: 9, key: '', cam: new THREE.PerspectiveCamera(), last: V3(), ctr: V3() };
+  const D2R = THREE.MathUtils.degToRad, FIT_X = 6, FIT_T = 44, FIT_B = 10; // lề thêm (điểm ảnh): hai bên, phía trên (chỗ cho nhãn nằm trên món cao nhất), phía dưới
+  const fitBase = (B) => (B.solo ? B.viewSolo : B.view);
+  const fitSig = (id, B) => { const i = stage.insets || {}; return [host.clientWidth, host.clientHeight, i.l, i.r, i.t, i.b].map((v) => (+v || 0).toFixed(4)).join('|') + '|' + id + '|' + (B.solo || ''); };
+  function fitPoints(B) { // góc hộp bao (toạ độ phòng) của mọi món đang hiện; đo lại mỗi 0,3 giây, đứng yên khi tay đang cầm món di chuyển
+    const key = B.id + '|' + (B.solo || '');
+    if (key === FIT.key && FIT.pts.length && (FIT.age < 0.3 || B.seq.busy())) return;
+    FIT.key = key; FIT.age = 0; const pts = FIT.pts = [];
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    Object.values(B.items).forEach((it) => {
+      if (!it.obj.visible) return; const p = it.obj.getWorldPosition(V3()); pts.push(p);
+      partBoxes(it).forEach(([a, b]) => { for (let i = 0; i < 8; i++) pts.push(V3(p.x + (i & 1 ? b.x : a.x), p.y + (i & 2 ? b.y : a.y), p.z + (i & 4 ? b.z : a.z))); });
+    });
+    pts.forEach((p) => { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
+    const v = fitBase(B), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2; FIT.ctr.set(cx, v.target[1], cz);
+    FIT.ext = [V3(cx, v.target[1] - v.h / 2, cz), V3(cx, v.target[1] + v.h / 2, cz)]; // chiều cao khung theo giáo án: chỉ tính cho chiều dọc
+  }
+  // Giải vị trí máy quay cho hướng nhìn và ống kính của cam: gần nhất mà mọi điểm vẫn nằm trong phần cảnh không bị che, bộ dụng cụ nằm giữa phần đó.
+  function fitSolve(cam) {
+    const w = host.clientWidth, h = host.clientHeight, ins = stage.insets; if (!w || !h || !ins || !FIT.pts.length) return null;
+    const e = cam.projectionMatrix.elements, q = cam.quaternion, r = V3(1, 0, 0).applyQuaternion(q), u = V3(0, 1, 0).applyQuaternion(q), f = V3(0, 0, -1).applyQuaternion(q);
+    const X0 = Math.max(ins.l * w + FIT_X, 22), X1 = w - Math.max(ins.r * w + FIT_X, 22), Y0 = ins.t * h + FIT_T, Y1 = h - ins.b * h - FIT_B; // không có bảng bên cạnh (ba cột) vẫn chừa 22 px tới mép cảnh
+    const A = (2 * X0 / w - 1 + e[8]) / e[0], Bq = (2 * X1 / w - 1 + e[8]) / e[0], C = (1 - 2 * Y1 / h + e[9]) / e[5], D = (1 - 2 * Y0 / h + e[9]) / e[5]; // mép trái, phải, dưới, trên tính theo tang góc nhìn
+    if (Bq - A < 0.02 || D - C < 0.02) return null;
+    let MA = Infinity, MB = -Infinity, MC = Infinity, MD = -Infinity;
+    const each = (p, side) => { const xr = p.dot(r), xu = p.dot(u), xf = p.dot(f); if (side) { MA = Math.min(MA, xr - A * xf); MB = Math.max(MB, xr - Bq * xf); } MC = Math.min(MC, xu - C * xf); MD = Math.max(MD, xu - D * xf); };
+    FIT.pts.forEach((p) => each(p, true)); FIT.ext.forEach((p) => each(p, false));
+    const pf = Math.min((MA - MB) / (Bq - A), (MC - MD) / (D - C)), pr = (MB + Bq * pf + MA + A * pf) / 2, pu = (MD + D * pf + MC + C * pf) / 2;
+    const pos = r.multiplyScalar(pr).addScaledVector(u, pu).addScaledVector(f, pf);
+    return { pos, f, depth: FIT.ctr.dot(f) - pf }; // depth: từ máy quay tới giữa bộ dụng cụ, dọc theo hướng nhìn (tâm xoay đặt ở đó)
+  }
+  // Khung chuẩn của một bàn, đưa cho stage.focus: cùng hướng nhìn với giáo án, nhưng tâm và khoảng cách lấy từ lời giải ở trên.
+  function fitView(B) {
+    const base = fitBase(B), w = host.clientWidth, h = host.clientHeight, ins = stage.insets;
+    if (!WIDE.matches || !ins || !w || !h) return base;
+    FIT.age = 9; fitPoints(B);
+    const c = FIT.cam, az = D2R(base.az || 0), el = D2R(base.el ?? 16), cyv = base.cy ?? 0.5;
+    c.fov = base.fov || 28; c.aspect = w / h;
+    const ox = ((ins.r - ins.l) / 2) * w, oy = (0.5 - ins.t - (1 - ins.t - ins.b) * cyv) * h; // cùng cách dời tâm chiếu với stage.js (applyInsets)
+    if (Math.abs(ox) > 0.5 || Math.abs(oy) > 0.5) c.setViewOffset(w, h, ox, oy, w, h); else c.clearViewOffset();
+    c.updateProjectionMatrix(); c.position.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)); c.up.set(0, 1, 0); c.lookAt(0, 0, 0);
+    const s = fitSolve(c); if (!s || !(s.depth > 0.5)) return base;
+    const d = s.depth, T = s.pos.clone().addScaledVector(s.f, d), t = Math.tan(D2R(c.fov / 2)), fw = Math.max(0.2, 1 - ins.l - ins.r);
+    FIT.ref = d;
+    return { ...base, target: [T.x, T.y, T.z], w: (2 * d * t * c.aspect * fw) / 1.04, h: 0.001, maxDist: Math.max(base.maxDist || 16.5, d * 1.3) }; // w chọn sao cho stage.js (solve) ra đúng khoảng cách d
+  }
+  const zoomNow = () => (active && WIDE.matches && FIT.ref ? (FIT.on ? 1 : stage.camera.position.distanceTo(CTRL.target) / FIT.ref) : stage.zoom()); // 1 = đúng khung chuẩn, lớn hơn 1 = đã lùi ra
+  CTRL.addEventListener('start', () => { FIT.moved = true; FIT.pend = 0; });
+  host.addEventListener('wheel', () => { FIT.on = false; }, { passive: true, capture: true });
+  let fitTouch = 0; // số ngón tay đang đặt trên cảnh: từ hai ngón là dời hoặc phóng
+  host.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') fitTouch++; if (dragPan || e.button === 2 || e.shiftKey || e.ctrlKey || e.metaKey || fitTouch > 1) FIT.on = false; }, { capture: true });
+  ['pointerup', 'pointercancel'].forEach((n) => window.addEventListener(n, (e) => { if (e.pointerType === 'touch') fitTouch = Math.max(0, fitTouch - 1); }));
+  function fitUpdate(dt) {
+    const B = active && benches[active]; if (!B || !WIDE.matches || !stage.insets) return;
+    const cam = stage.camera, sig = fitSig(active, B), mv = cam.position.distanceTo(FIT.last); FIT.last.copy(cam.position); FIT.age += dt;
+    // Bảng thu gọn, cửa sổ đổi cỡ, đổi chế độ một bình: khung chuẩn cũ không còn đúng. Chưa ai đụng vào máy quay thì lia tới khung chuẩn mới.
+    if (sig !== FIT.sig) { FIT.sig = sig; if (!FIT.moved && FIT.on) { stage.focus(fitView(B)); FIT.pend = 3; return; } }
+    if (FIT.pend > 0) { FIT.pend -= dt; if (FIT.pend < 2.8 && mv < 1e-5) FIT.pend = 0; return; } // stage.js đang tự lia tới khung chuẩn: chờ tới nơi
+    if (!FIT.on) return;
+    fitPoints(B); const s = fitSolve(cam); if (!s) return;
+    const d = clamp(s.depth, CTRL.minDistance * 1.02, CTRL.maxDistance * 0.98), T = TMPV.copy(s.pos).addScaledVector(s.f, d), k = Math.min(1, dt * 8);
+    if (cam.position.distanceToSquared(s.pos) > 1e-8 || CTRL.target.distanceToSquared(T) > 1e-8) { cam.position.lerp(s.pos, k); CTRL.target.lerp(T, k); FIT.last.copy(cam.position); }
+    FIT.ref = d;
+  }
+
   const VIEWS = { all: { swing: 38, elMin: 8, elMax: 62, ...decl.overview } };
   list.forEach((B) => { VIEWS[B.id] = B.view; });
   syncScene();
 
-  return {
+  const api = {
     stage, benches, CABINET,
-    view: (id, immediate) => stage.focus(benches[id] ? (benches[id].solo ? benches[id].viewSolo : benches[id].view) : VIEWS.all, immediate),
+    view: (id, immediate) => {
+      const B = benches[id]; FIT.on = !!B; FIT.moved = false; FIT.pend = B && !immediate ? 3 : 0;
+      const v = B ? fitView(B) : VIEWS.all; if (B) FIT.sig = fitSig(id, B);
+      stage.focus(v, immediate);
+    },
     // Tới gần một bàn (id) hoặc về toàn cảnh (null). Rời bàn nào thì động tác đang dở của bàn đó được làm xong ngay.
-    setActive(id) { if (active && active !== id && benches[active]) benches[active].seq.flush(); active = id && benches[id] ? id : null; zoomGoal = null; camMode(); syncScene(); },
+    setActive(id) { if (active && active !== id && benches[active]) benches[active].seq.flush(); active = id && benches[id] ? id : null; zoomGoal = null; if (!active) FIT.on = false; camMode(); syncScene(); },
     // THANH MỨC ZOOM: 100% = khung chuẩn của bàn (hoặc của cả phòng). zoomBy(1.35) = tới gần hơn một nấc, zoomBy(1 / 1.35) = lùi ra một nấc; trong giới hạn của khung đang xem.
-    zoomPct: () => Math.round(100 / stage.zoom() / 5) * 5,
-    zoomBy(f) { const d = zoomGoal ?? stage.camera.position.distanceTo(CTRL.target); CTRL.dispatchEvent({ type: 'start' }); zoomGoal = clamp(d / f, CTRL.minDistance, CTRL.maxDistance); },
+    zoomPct: () => Math.round(100 / zoomNow() / 5) * 5,
+    zoomBy(f) { const d = zoomGoal ?? stage.camera.position.distanceTo(CTRL.target); CTRL.dispatchEvent({ type: 'start' }); FIT.on = false; zoomGoal = clamp(d / f, CTRL.minDistance, CTRL.maxDistance); },
     zoomReset() { zoomGoal = null; stage.resetView(); },
     dragMode: () => (dragPan ? 'pan' : 'rotate'), // kéo chuột lúc này dời khung hay xoay
     active: () => active,
@@ -525,7 +691,8 @@ export function createLab(host, decl) {
         const nx = clamp(t.x, v[0] - hx, v[0] + hx), ny = clamp(t.y, y0, y1), nz = clamp(t.z, v[2] - hz, v[2] + hz);
         if (nx !== t.x || ny !== t.y || nz !== t.z) { stage.camera.position.x += nx - t.x; stage.camera.position.y += ny - t.y; stage.camera.position.z += nz - t.z; t.set(nx, ny, nz); }
       }
-      if (active) { const z = 1 / stage.zoom(); if (!dragPan && z >= 1.3) setDrag(true); else if (dragPan && z <= 1.1) setDrag(false); }
+      fitUpdate(dt); // khung tự canh: bộ dụng cụ của bàn đang xem nằm gọn giữa hai bảng nổi, xoay góc nào cũng vậy
+      if (active) { const z = 1 / zoomNow(); if (!dragPan && z >= 1.3) setDrag(true); else if (dragPan && z <= 1.1) setDrag(false); }
       if (zoomGoal != null) { // nút + và − của thanh mức zoom: máy quay trượt tới khoảng cách mới
         const cam = stage.camera, v = TMPV.copy(cam.position).sub(CTRL.target), d = v.length(), nd = Math.abs(zoomGoal - d) < 0.02 ? zoomGoal : d + (zoomGoal - d) * Math.min(1, dt * 10);
         cam.position.copy(CTRL.target).add(v.setLength(nd)); if (nd === zoomGoal) zoomGoal = null;
@@ -544,7 +711,11 @@ export function createLab(host, decl) {
         const f = B.fade; if (f.k !== f.goal) { f.k += (f.goal - f.k) * Math.min(1, dt * 7); if (Math.abs(f.goal - f.k) < 0.01) f.k = f.goal; applyFade(B); }
       });
       updaters.forEach((f) => f(dt));
+      avoidTags(dt);
       if (wallMats.length) { const goal = active ? (ROOM.dim ?? 0.72) : 1; if (Math.abs(goal - wallK) > 0.002) { wallK += (goal - wallK) * Math.min(1, dt * 5); wallMats.forEach((m) => m.color.setScalar(0.95 * wallK)); } }
     },
   };
+  // "Về góc chuẩn" và bấm con số phần trăm: ở một bàn thì về khung chuẩn vừa giải lại (bộ dụng cụ có thể đã đổi từ lần lia trước), không dùng lại khung cũ.
+  const reset0 = stage.resetView; stage.resetView = () => { if (active && WIDE.matches) api.view(active); else reset0(); };
+  return api;
 }
