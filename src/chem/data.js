@@ -82,6 +82,27 @@ export const KSP = {
 // Cặp ion mà luật đơn giản cho kết quả sai hoặc phức tạp hơn mức phổ thông: trả "chưa có dữ liệu".
 export const NA_PAIRS = new Set(['Cu|CO3', 'Zn|CO3', 'Mg|CO3', 'Fe2|CO3', 'Cu|HCO3', 'Zn|HCO3', 'Fe2|HCO3', 'Pb|HCO3', 'Ag|HCO3', 'Cu|SCN', 'Pb|SCN', 'Ag|CH3COO', 'Cu|I', 'Fe3|I', 'Fe3|SCN', 'Fe3|CO3', 'Fe3|HCO3', 'Al|CO3', 'Al|HCO3', 'Ag|OH', 'NH4|CO3']);
 
+// ---------- kết tủa đã tạo gặp chất khác (S1, 21/11). Mỗi dòng có nguồn đã đọc, ghi ở L2_LOGIC_CONG_THUC.md mục 5.2 ----------
+// Kết tủa tan trong acid: 'cation|anion' → { weak: true nếu nguồn nêu rõ cả acid yếu (acetic) }. Chỉ áp dụng khi muối tạo ra tan hẳn (máy tự kiểm).
+export const PPT_ACID = {
+  'Mg|OH': {}, 'Cu|OH': {}, 'Al|OH': {}, 'Zn|OH': {}, // từng chất có câu riêng trong nguồn [L1] [L5] [L6] [L7] [L8]
+  'Fe2|OH': {}, 'Fe3|OH': {}, // theo câu chung "hydroxide base tan dễ trong acid" [L1] [L2]; chưa có câu riêng cho hai chất này
+  'Ba|CO3': { weak: true }, // "soluble in acid, including dilute acetic acid" [L4]
+  'Pb|CO3': {}, 'Ag|CO3': {}, // theo câu chung "even insoluble carbonate salts dissolve in acid" [L3]
+};
+// Kết tủa KHÔNG tan trong NaOH dư ở nồng độ phòng thí nghiệm [L5] [L9].
+export const PPT_BASE_INERT = {
+  'Cu|OH': 'Cu(OH)₂ không tan trong NaOH dư ở nồng độ thường dùng (chỉ tan trong kiềm rất đặc).',
+  'Fe2|OH': 'Fe(OH)₂ không tan trong NaOH dư.', 'Fe3|OH': 'Fe(OH)₃ không tan trong NaOH dư.',
+};
+// Kết tủa không tan trong acid (base: cả trong kiềm) [L4] [L10].
+export const PPT_INERT = {
+  'Ba|SO4': { base: true, why: 'BaSO₄ không tan trong nước, trong acid và trong kiềm. Vì vậy kết tủa trắng BaSO₄ dùng để nhận biết ion sulfate.' },
+  'Ag|Cl': { why: 'AgCl không tan trong acid, kể cả nitric acid. Vì vậy kết tủa trắng AgCl dùng để nhận biết ion chloride.' },
+};
+// Độ tan của Ca(OH)₂ trong nước ở 20 °C: 1,73 g/L [L11]. Phần vượt mức này nằm lại ở dạng rắn (vôi tôi).
+export const CAOH2_SAT_G_L = 1.73;
+
 // Khoảng đổi màu của chất chỉ thị.
 export const INDICATOR = {
   quy: (ph) => (ph < 5 ? ['đỏ', '#d64545'] : ph > 8 ? ['xanh', '#2f6fd0'] : ['tím (không đổi)', '#8a5ad6']),

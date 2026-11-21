@@ -4,7 +4,7 @@
 //   'na'       chưa có dữ liệu (không đoán)
 // Thứ tự xét: bảng ngoại lệ viết tay → các luật → mặc định 'na'.
 // Bản thử 18/11/2026. CHƯA có giáo viên Hoá duyệt.
-import { CATIONS, ANIONS, CHEMS, BY_ID, SERIES, CATION_METAL, METAL_LOOK, INSOLUBLE, KSP, NA_PAIRS, INDICATOR } from './data.js';
+import { CATIONS, ANIONS, CHEMS, BY_ID, SERIES, CATION_METAL, METAL_LOOK, INSOLUBLE, KSP, NA_PAIRS, INDICATOR, PPT_ACID, PPT_BASE_INERT, PPT_INERT } from './data.js';
 import { equation, pretty, prettyIon, parse, molarMass } from './formula.js';
 
 const gcd = (a, b) => (b ? gcd(b, a % b) : a);
@@ -22,6 +22,28 @@ export function compound(catId, anId) {
   const ap = na > 1 ? (a.poly ? `(${a.f})${na}` : a.f + na) : a.f;
   return cp + ap;
 }
+
+// ---------- chất phát sinh trong ống (không có trong tủ) ----------
+// Sản phẩm tan (ZnCl₂, FeCl₂, Cu(NO₃)₂…) và kết tủa (Cu(OH)₂, BaSO₄…) được ghi vào BY_ID với derived: true để sổ ống nghiệm
+// theo dõi và cho phản ứng tiếp bằng CHÍNH các bảng ion của máy. Không nằm trong CHEMS nên không hiện trong tủ và không đổi 780 cặp của bài kiểm.
+// Không tự sinh muối của OH⁻, CO₃²⁻, HCO₃⁻, MnO₄⁻ (pH và tính oxi hoá chưa có dữ liệu) và các cặp ion trong NA_PAIRS.
+const CAT_NAME = { Na: 'Sodium', K: 'Potassium', NH4: 'Ammonium', Ag: 'Silver', Ba: 'Barium', Ca: 'Calcium', Mg: 'Magnesium', Zn: 'Zinc', Cu: 'Copper(II)', Fe2: 'Iron(II)', Fe3: 'Iron(III)', Al: 'Aluminium', Pb: 'Lead(II)' };
+const AN_NAME = { Cl: 'chloride', NO3: 'nitrate', SO4: 'sulfate', CO3: 'carbonate', HCO3: 'hydrogencarbonate', OH: 'hydroxide', I: 'iodide', CH3COO: 'acetate', MnO4: 'permanganate', SCN: 'thiocyanate' };
+// Màu của cation trong dung dịch: lấy đúng màu đã khai cho muối cùng cation trong tủ (không thêm màu mới).
+const ION_LOOK = { Cu: BY_ID.CuSO4, Fe2: BY_ID.FeSO4, Fe3: BY_ID.FeCl3 };
+const STOCK_F = Object.fromEntries(CHEMS.filter((c) => c.group !== 'indicator').map((c) => [c.f, c.id]));
+const SOLUTE_ID = Object.fromEntries(CHEMS.filter((c) => c.conc && c.ions).map((c) => [c.f, c.id])), PPT_ID = { ...STOCK_F };
+export const PAIR_OF = {}, DERIVED = [];
+const derive = (f, extra) => { const id = f.replace(/[()[\]]/g, ''); if (BY_ID[id]) throw new Error(`Trùng mã chất phát sinh: ${id}`); const c = { id, f, derived: true, ...extra }; BY_ID[id] = c; DERIVED.push(c); return id; };
+for (const c of Object.keys(CATIONS)) { if (c === 'H') continue; for (const a of Object.keys(ANIONS)) {
+  const k = `${c}|${a}`, f = compound(c, a), g = gcd(CATIONS[c].q, ANIONS[a].q), name = `${CAT_NAME[c]} ${AN_NAME[a]}`, lk = ION_LOOK[c]; PAIR_OF[f] = [c, a];
+  if (STOCK_F[f]) continue;
+  if (INSOLUBLE[k]) PPT_ID[f] = derive(f, { name, group: 'solid', color: INSOLUBLE[k].color });
+  else if (!NA_PAIRS.has(k) && !['OH', 'CO3', 'HCO3', 'MnO4'].includes(a)) PPT_ID[f] = SOLUTE_ID[f] = derive(f, { name, group: 'salt', ions: [c, ANIONS[a].q / g, a, CATIONS[c].q / g], color: lk ? lk.color : 'không màu', ...(lk ? { hex: lk.hex, ref: lk.conc } : {}) });
+} }
+PPT_ID.Ag2O = derive('Ag2O', { name: 'Silver oxide', group: 'solid', color: 'nâu đen' }); PPT_ID.CuI = derive('CuI', { name: 'Copper(I) iodide', group: 'solid', color: 'trắng' });
+export const soluteId = (f) => SOLUTE_ID[f] || null; // sản phẩm tan này ứng với chất nào trong sổ (trong tủ hoặc phát sinh)
+export const pptId = (f) => PPT_ID[f] || null; // kết tủa này ứng với mã chất nào
 
 // ---------- hiệu ứng: mỗi phản ứng được diễn bằng tổ hợp các dạng này ----------
 const E = {
@@ -108,7 +130,8 @@ function ionRule(A, B, opts = {}) {
   const [c1, n1, a1, m1] = A.ions, [c2, n2, a2, m2] = B.ions;
   if (c1 === c2 || a1 === a2) return none(A, B, 'Hai chất có chung một loại ion nên không có phản ứng trao đổi.');
   const vA = opts.volA ?? 1, vB = opts.volB ?? 1, fA = vA / (vA + vB), fB = vB / (vA + vB);
-  const conc = { [c1]: A.conc * n1 * fA, [a1]: A.conc * m1 * fA, [c2]: B.conc * n2 * fB, [a2]: B.conc * m2 * fB };
+  const cA = opts.conc?.[A.id] ?? A.conc * fA, cB = opts.conc?.[B.id] ?? B.conc * fB; // opts.conc: nồng độ thật trong ống (mol/L), sổ ống nghiệm đưa vào khi có chất phát sinh
+  const conc = { [c1]: cA * n1, [a1]: cA * m1, [c2]: cB * n2, [a2]: cB * m2 };
   const lhs = [A.f, B.f], rhs = [], marks = {}, effects = [], reasons = [], notes = []; let ionic = null, any = false;
   const weak = (!A.strong && A.group === 'acid') || (!B.strong && B.group === 'acid');
   for (const [c, a] of [[c1, a2], [c2, a1]]) {
@@ -131,6 +154,7 @@ function ionRule(A, B, opts = {}) {
       ionic = ionic || (weak ? null : equation([ci, ai], [f], marks)?.text);
     } else if (KSP[k]) {
       const s = KSP[k], Q = Math.pow(conc[c], s.a) * Math.pow(conc[a], s.b);
+      if (!Number.isFinite(Q)) return na(A, B, `${pretty(f)} ít tan; chưa biết nồng độ trong ống nên app chưa kết luận được có kết tủa hay không.`);
       if (Q > s.ksp * VISIBLE) { any = true; rhs.push(f); marks[f] = '↓'; effects.push(E.ppt(f, s.color, 'vẩn đục nhẹ')); reasons.push(`${pretty(f)} ít tan; ở nồng độ này lượng tạo ra vượt mức hoà tan nên dung dịch vẩn đục.`); ionic = ionic || equation([ci, ai], [f], marks)?.text; } else { rhs.push(f); notes.push(Q > s.ksp ? `${pretty(f)} ít tan. Ở nồng độ này mới sát ngưỡng bão hoà nên thường chưa thấy kết tủa; dung dịch đặc hơn thì vẩn đục.` : `${pretty(f)} ít tan, nhưng ở nồng độ loãng này chưa đủ để tạo kết tủa.`); }
     } else { rhs.push(f); if (a === 'HCO3' && (c === 'Ca' || c === 'Ba')) notes.push(`Ở nhiệt độ thường không thấy gì. Nếu đun nóng, xuất hiện kết tủa trắng ${pretty(c + 'CO3')} và có khí CO₂.`); }
   }
@@ -176,6 +200,7 @@ function metalRule(M, X, opts) {
   if (X.group === 'salt') {
     const [cc, , an] = X.ions, T = CATION_METAL[cc];
     if (!T) return na(M, X); // muối ammonium
+    if (cc === 'Fe3') return na(M, X, 'Ion Fe³⁺ là chất oxi hoá: với kim loại, nó bị khử về Fe²⁺ trước chứ không theo luật đẩy kim loại đơn giản. App mới có dữ liệu cho FeCl₃.'); // FeCl₃ đã nằm trong bảng ngoại lệ; dòng này chặn Fe(NO₃)₃, Fe₂(SO₄)₃ phát sinh trong ống
     if (['Na', 'K', 'Ba', 'Ca'].includes(T)) return ['Na2CO3', 'NaHCO3'].includes(X.id) && ['Mg', 'Al', 'Zn'].includes(m) ? na(M, X) : none(M, X, `${M.name} yếu hơn ${T} nên không đẩy được ${T} ra khỏi muối.`);
     if (m === T) return none(M, X, 'Kim loại và muối của chính kim loại đó không phản ứng với nhau.');
     if (rank(m) > rank(T)) return none(M, X, `${M.name} đứng sau ${T} trong dãy hoạt động hoá học nên không đẩy được ${T} ra khỏi muối.`);
@@ -224,7 +249,7 @@ function ammoniaRule(N, X) {
 }
 
 const isElectrolyte = (x) => x.ions && !x.special && (x.group === 'acid' || x.group === 'base' || x.group === 'salt');
-const OX_NA = new Set([key('HNO3', 'KI'), key('HNO3', 'FeSO4'), key('HNO3', 'KSCN')]);
+const REDUCING = ['Fe2', 'I', 'SCN'], oxNa = (A, B) => [[A, B], [B, A]].some(([x, y]) => x.id === 'HNO3' && y.ions && (REDUCING.includes(y.ions[0]) || REDUCING.includes(y.ions[2]))); // trong tủ: đúng 3 cặp HNO₃ + KI, FeSO₄, KSCN như trước
 
 // Hàm chính. opts: { medium: 'acid', volA, volB }
 export function predict(idA, idB, opts = {}) {
@@ -241,9 +266,32 @@ export function predict(idA, idB, opts = {}) {
   if ((p = pick((x) => x.id === 'H2O2'))) return p[1].id === 'H2O' ? none(p[0], p[1], 'Chỉ pha loãng dung dịch.') : na(p[0], p[1]);
   if ((p = pick((x) => x.id === 'H2O'))) return none(p[0], p[1], 'Chỉ pha loãng dung dịch.');
   if ((p = pick((x) => x.id === 'NH3'))) return ammoniaRule(p[0], p[1]);
-  if (OX_NA.has(key(idA, idB))) return na(A, B, 'Nitric acid có tính oxi hoá, phản ứng với chất khử này phức tạp hơn mức phổ thông. App chưa mô phỏng.');
+  if (oxNa(A, B)) return na(A, B, 'Nitric acid có tính oxi hoá, phản ứng với chất khử này phức tạp hơn mức phổ thông. App chưa mô phỏng.');
   if (isElectrolyte(A) && isElectrolyte(B)) return ionRule(A, B, opts);
   return na(A, B);
+}
+
+// Kết tủa (hoặc chất rắn sinh ra) đang nằm trong ống gặp một chất tan idB. f: công thức kết tủa.
+// Chỉ kết luận những gì có nguồn (bảng PPT_ACID, PPT_BASE_INERT, PPT_INERT trong data.js và cờ amph của INSOLUBLE); còn lại trả 'na'.
+// Kết tủa trùng với một chất rắn trong tủ (CaCO₃, CuO, Ag) hoặc Ca(OH)₂ gặp acid thì dùng lại luật sẵn có của predict.
+export function predictPpt(f, idB) {
+  const X = BY_ID[idB], S = BY_ID[PPT_ID[f]]; if (!X || !S) return null;
+  if (!S.derived) return S.group === 'solid' || S.group === 'metal' || (S.id === 'CaOH2' && X.group === 'acid') ? predict(S.id, idB) : na(S, X, 'App chưa có dữ liệu cho kết tủa này với chất vừa thêm.');
+  const pair = PAIR_OF[f], k = pair ? pair.join('|') : f, c = pair && pair[0], a = pair && pair[1], tan = E.dissolve(`Kết tủa ${pretty(f)}`);
+  if (X.group === 'acid' && PPT_ACID[k] && (X.strong || PPT_ACID[k].weak)) {
+    const an = X.ions[2], ks = `${c}|${an}`, salt = compound(c, an), lk = ION_LOOK[c];
+    if (INSOLUBLE[ks] || KSP[ks] || NA_PAIRS.has(ks)) return na(S, X, `Muối tạo ra (${pretty(salt)}) không tan hoặc ít tan, bám lên kết tủa cũ nên diễn biến phức tạp hơn mức phổ thông. App chưa mô phỏng.`);
+    if (X.oxidizing && c === 'Fe2') return na(S, X, 'Nitric acid còn oxi hoá Fe²⁺ lên Fe³⁺, phức tạp hơn mức phổ thông. App chưa mô phỏng.');
+    const gas = a === 'CO3', marks = gas ? { CO2: '↑' } : {}, ion = { f: CATIONS[c].f, q: CATIONS[c].q };
+    const fx = [...(gas ? [E.gas('CO2', 'carbon dioxide', X.strong ? {} : { rate: 'chậm' })] : []), ...(lk ? [E.color('không màu', lk.color, lk.hex)] : []), tan];
+    return rx(X, S, [f, X.f], gas ? [salt, 'CO2', 'H2O'] : [salt, 'H2O'], marks, fx, gas ? `Muối carbonate không tan vẫn tác dụng với acid mạnh hơn carbonic acid: tạo muối tan ${pretty(salt)}, khí CO₂ và nước, nên kết tủa tan dần.` : `${pretty(f)} là base không tan: tác dụng với acid tạo muối tan ${pretty(salt)} và nước, nên kết tủa tan dần.`,
+      { ionic: X.strong ? equation([{ f }, { f: 'H', q: 1 }], gas ? [ion, { f: 'CO2' }, { f: 'H2O' }] : [ion, { f: 'H2O' }], { ...marks })?.text : null });
+  }
+  if (X.id === 'NaOH' && INSOLUBLE[k]?.amph) { const p = INSOLUBLE[k].amph === 1 ? 'Na[Al(OH)4]' : 'Na2[Zn(OH)4]';
+    return rx(X, S, [f, 'NaOH'], [p], {}, [tan], `${pretty(f)} là hydroxide lưỡng tính: tan trong dung dịch kiềm dư, tạo ${pretty(p)} tan trong nước.`, { ionic: INSOLUBLE[k].amph === 1 ? 'Al(OH)₃ + OH⁻ → [Al(OH)₄]⁻' : 'Zn(OH)₂ + 2OH⁻ → [Zn(OH)₄]²⁻' }); }
+  if (X.id === 'NaOH' && PPT_BASE_INERT[k]) return none(S, X, PPT_BASE_INERT[k]);
+  if (PPT_INERT[k] && (X.group === 'acid' || (PPT_INERT[k].base && (X.id === 'NaOH' || X.id === 'CaOH2')))) return none(S, X, PPT_INERT[k].why);
+  return na(S, X, 'App chưa có dữ liệu cho kết tủa này với chất vừa thêm.');
 }
 
 // Lượng chất: đổi mL (dung dịch) hoặc gam (chất rắn) ra mol, rồi tìm chất hết trước.

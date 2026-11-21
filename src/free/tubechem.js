@@ -1,15 +1,21 @@
 // Sổ sách của một ống nghiệm: trong ống có chất gì, bao nhiêu mol, chất nào hết, chất nào dư,
 // kết tủa nào đã tạo, dung dịch màu gì, chất chỉ thị đang ở màu nào. Không có hình: chạy được bằng node để kiểm thử.
-// Quy ước của bản thử: hai chất gặp nhau thì phản ứng xong ngay (coi như đã lắc đều); kết tủa đã tạo không phản ứng tiếp.
-import { predict, BY_ID, CHEMS } from '../chem/engine.js';
-import { INDICATOR } from '../chem/data.js';
+// Quy ước: hai chất gặp nhau thì phản ứng xong ngay (coi như đã lắc đều).
+// Từ 21/11 (việc S1, S2, S3 của L2 · Logic):
+//   S1  kết tủa đã tạo phản ứng tiếp với acid và kiềm dư, theo predictPpt của máy (chỉ những cặp có nguồn);
+//   S2  nước cất trong ống là chất phản ứng của chất rắn (Na, CaO); nước coi như luôn dư;
+//   S3  sản phẩm tan không có trong tủ (ZnCl₂, FeCl₂…) vẫn nằm trong sổ như một chất "phát sinh" (BY_ID[id].derived) và phản ứng tiếp.
+// Sự kiện phản ứng: made liệt kê chất sinh ra; một dòng made có mol ÂM nghĩa là chất do phản ứng trước sinh ra nay bị tiêu hao bấy nhiêu
+// (kết tủa tan, sản phẩm tan phản ứng tiếp). Cộng dồn made theo công thức luôn ra đúng lượng sản phẩm đang còn, không bao giờ âm.
+import { predict, predictPpt, soluteId, pptId, BY_ID } from '../chem/engine.js';
+import { INDICATOR, CAOH2_SAT_G_L } from '../chem/data.js';
 import { molarMass, pretty, equation } from '../chem/formula.js';
 
 export const DROP_ML = 0.05, MAX_ML = 12, CLEAR = '#dcecf5'; // MAX_ML: sức chứa mặc định (ống nghiệm). Mỗi bình mang sức chứa riêng t.cap (cốc 100 mL: 100)
 export const PIECE = { Zn: { g: 0.3, unit: 'hạt kẽm' }, CaCO3: { g: 0.25, unit: 'mẩu đá vôi' }, Mg: { g: 0.05, unit: 'đoạn dây magnesium' }, Fe: { g: 0.5, unit: 'đinh sắt' }, Cu: { g: 0.3, unit: 'đoạn dây đồng' }, Al: { g: 0.1, unit: 'mảnh nhôm' } };
 const PIECE_DEF = { g: 0.2, unit: 'mẩu' };
 const STRONG_H = { HCl: 1, H2SO4: 2, HNO3: 1 }, STRONG_OH = { NaOH: 1, CaOH2: 2 };
-const BY_F = Object.fromEntries(CHEMS.filter((c) => c.conc && c.ions).map((c) => [c.f, c.id])); // sản phẩm tan trùng với chất trong kho thì theo dõi tiếp
+const LIME_SAT = CAOH2_SAT_G_L / molarMass('Ca(OH)2'); // độ tan của Ca(OH)₂, mol/L
 const EPS = 1e-10, clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 export const isSolid = (id) => ['metal', 'solid'].includes(BY_ID[id].group);
 const isReagent = (id) => BY_ID[id].group !== 'indicator' && id !== 'H2O';
@@ -17,6 +23,8 @@ export const label = (id) => (BY_ID[id].group === 'indicator' ? BY_ID[id].name :
 
 export function newTube(cap = MAX_ML) { return { cap, items: {}, order: [], vol: 0, ppt: [], tints: [], indicator: null, indShown: null, gasTotal: 0, lastGas: null }; }
 function item(t, id) { if (!t.items[id]) { t.items[id] = { id, mol: 0, mol0: 0, mL: 0, drops: 0, pieces: 0, coat: null }; t.order.push(id); } return t.items[id]; }
+// Trừ bớt một chất. Trả về phần "do phản ứng sinh ra" (byRx) vừa mất: phần người dùng tự cho vào coi như mất trước.
+function take(it, mol) { const left = Math.max(0, it.mol - mol), lost = Math.max(0, (it.byRx || 0) - left); it.mol = left; if (lost > 0) it.byRx -= lost; return lost; }
 
 // Thêm một chất. amt: { mL, drop?: true } cho chất lỏng, { piece: true } cho chất rắn. Trả về { full } hoặc { events }.
 export function add(t, id, amt) {
@@ -28,41 +36,114 @@ export function add(t, id, amt) {
   else if (isSolid(id)) { const m = (PIECE[id] || PIECE_DEF).g / molarMass(c.f); it.mol += m; it.mol0 += m; it.pieces += 1; }
   else if (id !== 'H2O') { const m = (c.conc * amt.mL) / 1000; it.mol += m; it.mol0 += m; }
   if (isReagent(id)) events.push(...react(t, id, 0));
+  else if (id === 'H2O') events.push(...wet(t));
+  events.push(...settle(t)); limeEq(t);
+  if (['acid', 'base'].includes(c.group) && !events.some((e) => e.kind === 'reaction')) { const q = pptQuiet(t, id, events.length > 0); if (q) events.push(q); }
   const ind = indicatorLook(t);
   if (ind && ind.color !== t.indShown) { events.push({ kind: 'indicator', id: t.indicator, from: t.indShown, to: ind.color, changed: ind.changed, pH: ind.pH, first: t.indShown === null }); t.indShown = ind.color; }
   return { events };
 }
 
+// Ghi sản phẩm của một phản ứng vào sổ, trả về danh sách made. skip: hai chất tham gia (không tính là "mới sinh"). solid: chất rắn tham gia (để ghi lớp kim loại bám).
+function land(t, r, ext, skip, fresh, solid) {
+  const made = [], carriers = []; let loose = false; // carriers: sản phẩm tan có màu đang được sổ theo dõi; loose: có sản phẩm tan mà sổ không theo dõi (I₂, phức chất…)
+  for (const p of r.eq.rhs) {
+    const mol = p.coef * ext, pid = soluteId(p.f); made.push({ f: p.f, mol, mark: p.mark });
+    if (p.mark === '↓') { const fx = r.effects.find((e) => e.type === 'ppt' && e.f === p.f) || {}, old = t.ppt.find((q) => q.f === p.f); if (old) old.mol += mol; else t.ppt.push({ f: p.f, mol, color: fx.color || 'trắng', form: fx.form || '' }); }
+    else if (p.mark === '↑') { t.gasTotal += mol; t.lastGas = p.f; }
+    else if (pid) { const pi = item(t, pid); pi.mol += mol; pi.byRx = (pi.byRx || 0) + mol; if (!skip.includes(pid)) fresh.push(pid); if (BY_ID[pid].hex) carriers.push(pid); }
+    else if (p.f !== 'H2O' && !(pptId(p.f) && isSolid(pptId(p.f)))) loose = true;
+  }
+  for (const e of r.effects) {
+    // Màu mới của dung dịch: nếu do một sản phẩm tan đang được theo dõi mang (Cu²⁺, Fe²⁺, Fe³⁺) thì để chính chất đó giữ màu, hết chất là hết màu.
+    // Chỉ khi không quy được cho chất nào (I₂, phức Fe(SCN)₃…) mới ghi thành lớp màu cố định như trước.
+    if (e.type === 'color' && e.hex) { if (carriers.length && !loose) { for (const pid of carriers) if (BY_ID[pid].derived) t.items[pid].hex = e.hex; } else { const old = t.tints.find((q) => q.hex === e.hex); if (old) old.mol += ext; else t.tints.push({ hex: e.hex, name: e.to, mol: ext }); } }
+    if (e.type === 'coat' && solid) solid.coat = e.color;
+  }
+  return made;
+}
+
+// Hai chất trong sổ gặp nhau: tính lượng phản ứng, cập nhật sổ. Trả về { event } nếu có phản ứng, { quiet } nếu máy trả "không phản ứng" hoặc "chưa có dữ liệu".
+function pair(t, id, y, fresh) {
+  const A = t.items[id], B = t.items[y], water = y === 'H2O', V = Math.max(t.vol, 1e-6) / 1000;
+  const eqVol = (cid, x) => (BY_ID[cid].conc ? x.mol / BY_ID[cid].conc : 1);
+  const opts = BY_ID[id].derived || BY_ID[y].derived ? { conc: { [id]: A.mol / V, [y]: B.mol / V } } : { volA: eqVol(id, A), volB: eqVol(y, B) }; // chất phát sinh không có nồng độ trên nhãn: đưa nồng độ thật trong ống
+  const r = predict(id, y, opts);
+  if (r.kind !== 'reaction' || !r.eq) return { quiet: { kind: r.kind, r, a: id, b: y } };
+  const co = (cid) => r.eq.lhs.find((x) => x.f === BY_ID[cid].f)?.coef;
+  const ca = co(id), cb = water ? 0 : co(y), ext = Math.min(ca ? A.mol / ca : Infinity, cb ? B.mol / cb : Infinity); // nước cất là dung môi, coi như luôn dư
+  if (!isFinite(ext) || ext <= EPS) return {};
+  const lostA = ca ? take(A, ca * ext) : 0, lostB = cb ? take(B, cb * ext) : 0;
+  const made = land(t, r, ext, [id, y], fresh, isSolid(id) ? A : isSolid(y) ? B : null);
+  if (lostA > EPS) made.push({ f: BY_ID[id].f, mol: -lostA, mark: '' }); if (lostB > EPS) made.push({ f: BY_ID[y].f, mol: -lostB, mark: '' });
+  const e = { kind: 'reaction', r, a: id, b: y, extent: ext, made, used: { [id]: (ca || 0) * ext, [y]: (cb || 0) * ext }, out: A.mol <= EPS ? id : !water && B.mol <= EPS ? y : null, slow: isSolid(id) || isSolid(y) };
+  if (id === 'CaO' && water) limeCap(t, e);
+  return { event: e };
+}
+// CaO + nước: Ca(OH)₂ sinh ra chỉ tan tới mức bão hoà (LIME_SAT); phần vượt nằm lại ở đáy thành vôi tôi (đánh dấu lime).
+function limeCap(t, e) {
+  const it = t.items.CaOH2, m = e.made.find((x) => x.f === 'Ca(OH)2' && !x.mark && x.mol > 0); if (!it || !m) return;
+  const moved = Math.min(m.mol, it.mol - (LIME_SAT * t.vol) / 1000); if (moved <= EPS) return;
+  it.mol -= moved; it.byRx = Math.max(0, (it.byRx || 0) - moved); m.mol -= moved;
+  const old = t.ppt.find((q) => q.f === 'Ca(OH)2'); if (old) { old.mol += moved; old.lime = true; } else t.ppt.push({ f: 'Ca(OH)2', mol: moved, color: 'trắng', form: 'mịn', lime: true });
+  e.made.unshift({ f: 'Ca(OH)2', mol: moved, mark: '↓' }); if (m.mol <= EPS) e.made.splice(e.made.indexOf(m), 1);
+}
+
+// Thứ tự khi một chất gặp nhiều chất trong ống: trung hoà acid, base → các chất tan khác (phản ứng ion trong dung dịch) → kết tủa mịn đang có
+// → chất rắn dạng mẩu (kim loại, đá vôi: phản ứng trên bề mặt, chậm hơn) → nước cất.// Vôi tôi còn ở đáy thì dung dịch phía trên là nước vôi bão hoà: sau mỗi lần thêm chất (acid lấy bớt OH⁻, rót thêm nước), vôi tôi tan bù cho đủ mức bão hoà.
+// Ước lượng: không tính ảnh hưởng của ion Ca²⁺ có sẵn; khi ống còn NaOH thì không bù.
+function limeEq(t) {
+  const p = t.ppt.find((q) => q.f === 'Ca(OH)2' && q.lime && q.mol > EPS); if (!p || (t.items.NaOH && t.items.NaOH.mol > EPS)) return;
+  const it = item(t, 'CaOH2'), moved = Math.min(p.mol, (LIME_SAT * t.vol) / 1000 - it.mol); if (moved <= EPS) return;
+  p.mol -= moved; it.mol += moved; it.byRx = (it.byRx || 0) + moved;
+}
+
 function react(t, id, depth) {
-  const out = [], A = t.items[id], cx = BY_ID[id]; let quiet = null; const fresh = [];
+  const out = [], cx = BY_ID[id], fresh = []; let quiet = null;
   const others = t.order.filter((y) => y !== id && isReagent(y) && t.items[y].mol > EPS);
   const first = (y) => ((cx.group === 'acid' && BY_ID[y].group === 'base') || (cx.group === 'base' && BY_ID[y].group === 'acid') ? 0 : 1); // trung hoà xảy ra trước
   others.sort((a, b) => first(a) - first(b));
-  for (const y of others) {
-    const B = t.items[y]; if (A.mol <= EPS) break;
-    const eqVol = (cid, x) => (BY_ID[cid].conc ? x.mol / BY_ID[cid].conc : 1);
-    const r = predict(id, y, { volA: eqVol(id, A), volB: eqVol(y, B) });
-    if (r.kind !== 'reaction' || !r.eq) { if (B.mL > 0 || B.pieces > 0) quiet = quiet || { kind: r.kind, r, a: id, b: y }; continue; }
-    const co = (cid) => r.eq.lhs.find((x) => x.f === BY_ID[cid].f)?.coef;
-    const ca = co(id), cb = co(y), ext = Math.min(ca ? A.mol / ca : Infinity, cb ? B.mol / cb : Infinity);
-    if (!isFinite(ext) || ext <= EPS) continue;
-    if (ca) A.mol = Math.max(0, A.mol - ca * ext); if (cb) B.mol = Math.max(0, B.mol - cb * ext);
-    const made = [];
-    for (const p of r.eq.rhs) {
-      const mol = p.coef * ext; made.push({ f: p.f, mol, mark: p.mark });
-      if (p.mark === '↓') { const fx = r.effects.find((e) => e.type === 'ppt' && e.f === p.f) || {}, old = t.ppt.find((q) => q.f === p.f); if (old) old.mol += mol; else t.ppt.push({ f: p.f, mol, color: fx.color || 'trắng', form: fx.form || '' }); }
-      else if (p.mark === '↑') { t.gasTotal += mol; t.lastGas = p.f; }
-      else if (BY_F[p.f]) { const pid = BY_F[p.f], pi = item(t, pid); pi.mol += mol; if (pid !== id && pid !== y) fresh.push(pid); }
-    }
-    for (const e of r.effects) {
-      if (e.type === 'color' && e.hex) { const old = t.tints.find((q) => q.hex === e.hex); if (old) old.mol += ext; else t.tints.push({ hex: e.hex, name: e.to, mol: ext }); }
-      if (e.type === 'coat') { const s = isSolid(id) ? A : B; s.coat = e.color; }
-    }
-    out.push({ kind: 'reaction', r, a: id, b: y, extent: ext, made, used: { [id]: (ca || 0) * ext, [y]: (cb || 0) * ext }, out: A.mol <= EPS ? id : B.mol <= EPS ? y : null, slow: isSolid(id) || isSolid(y) });
-  }
+  const go = (y) => { if (t.items[id].mol <= EPS) return; const B = t.items[y], res = pair(t, id, y, fresh); if (res.event) out.push(res.event); else if (res.quiet && (B.mL > 0 || B.pieces > 0)) quiet = quiet || res.quiet; };
+  for (const y of others) if (!isSolid(y)) go(y);
+  if (!isSolid(id) && t.items[id].mol > EPS) out.push(...pptPhase(t, fresh, id));
+  for (const y of others) if (isSolid(y)) go(y);
+  if (isSolid(id) && t.items.H2O && t.items.H2O.mL > 0) go('H2O');
   if (depth < 2) for (const pid of new Set(fresh)) if (t.items[pid].mol > EPS) out.push(...react(t, pid, depth + 1).filter((e) => e.kind === 'reaction')); // sản phẩm tan gặp chất còn dư trong ống
   if (!out.length && quiet) out.push(quiet);
   return out;
+}
+// Rót nước cất vào ống đang có chất rắn (Na, CaO): chỉ ghi khi có phản ứng, không báo "không phản ứng" mỗi lần pha loãng.
+function wet(t) {
+  const out = [], fresh = [];
+  for (const y of [...t.order]) { if (!isSolid(y) || t.items[y].mol <= EPS) continue; const res = pair(t, y, 'H2O', fresh); if (res.event) out.push(res.event); }
+  for (const pid of new Set(fresh)) if (t.items[pid].mol > EPS) out.push(...react(t, pid, 1).filter((e) => e.kind === 'reaction'));
+  return out;
+}
+// Kết tủa đang có trong ống gặp các chất tan còn lại (acid dư, kiềm dư). Sự kiện: a = chất tan, b = mã của kết tủa.
+function pptPhase(t, fresh, only) {
+  const out = [];
+  for (const p of t.ppt) for (const y of only ? [only] : [...t.order]) {
+    if (p.mol <= EPS) break; const B = t.items[y]; if (!isReagent(y) || isSolid(y) || B.mol <= EPS) continue;
+    const r = predictPpt(p.f, y); if (!r || r.kind !== 'reaction' || !r.eq) continue;
+    const cp = r.eq.lhs.find((x) => x.f === p.f)?.coef, cb = r.eq.lhs.find((x) => x.f === BY_ID[y].f)?.coef; if (!cp) continue;
+    const ext = Math.min(p.mol / cp, cb ? B.mol / cb : Infinity); if (!isFinite(ext) || ext <= EPS) continue;
+    p.mol = Math.max(0, p.mol - cp * ext); const lostB = cb ? take(B, cb * ext) : 0, made = land(t, r, ext, [y], fresh, null);
+    made.push({ f: p.f, mol: -cp * ext, mark: '↓' }); if (lostB > EPS) made.push({ f: BY_ID[y].f, mol: -lostB, mark: '' });
+    out.push({ kind: 'reaction', ppt: true, r, a: y, b: pptId(p.f), extent: ext, made, used: { [y]: (cb || 0) * ext, [pptId(p.f)]: cp * ext }, out: p.mol <= EPS ? pptId(p.f) : B.mol <= EPS ? y : null, slow: false });
+  }
+  return out;
+}
+function settle(t) {
+  const out = [];
+  for (let round = 0; round < 3; round++) { const fresh = [], ev = pptPhase(t, fresh); if (!ev.length) break; out.push(...ev);
+    for (const pid of new Set(fresh)) if (t.items[pid].mol > EPS) out.push(...react(t, pid, 1).filter((e) => e.kind === 'reaction')); }
+  return out;
+}
+// Vừa thêm acid hoặc base mà không có phản ứng nào: nếu trong ống có kết tủa thì nói rõ kết tủa đó không tan (có nguồn) hoặc app chưa có dữ liệu.
+function pptQuiet(t, id, hasOther) {
+  let unknown = null;
+  for (const p of t.ppt) { if (p.mol <= EPS) continue; const r = predictPpt(p.f, id); if (!r || r.kind === 'reaction') continue; const q = { kind: r.kind, r, a: id, b: pptId(p.f) }; if (r.kind === 'none') return q; unknown = unknown || q; }
+  return hasOther ? null : unknown;
 }
 
 // pH ước lượng: acid mạnh và base mạnh tính theo lượng dư; chất yếu lấy pH ghi trong kho, pha loãng 10 lần lệch nửa đơn vị.
@@ -88,7 +169,7 @@ const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 export function look(t) {
   const V = Math.max(t.vol, 1e-6) / 1000; let c = rgb(CLEAR), op = 0.3; // dung dịch không màu để thật trong, cho lớp kết tủa bên dưới giữ đúng màu
   const blend = (hex, k) => { const d = rgb(hex); c = c.map((v, i) => v + (d[i] - v) * k); op = Math.max(op, 0.45 + 0.42 * k); };
-  for (const it of Object.values(t.items)) { const ch = BY_ID[it.id]; if (ch.hex && ch.conc && it.mol > 1e-9) blend(ch.hex, clamp(Math.pow(it.mol / V / (ch.conc * 0.7), 0.65), 0, 1)); }
+  for (const it of Object.values(t.items)) { const ch = BY_ID[it.id], hex = it.hex || ch.hex, ref = ch.conc || ch.ref; if (hex && ref && it.mol > 1e-9) blend(hex, clamp(Math.pow(it.mol / V / (ref * 0.7), 0.65), 0, 1)); } // chất phát sinh có màu (CuCl₂, FeCl₂…): mốc đậm nhạt ref lấy theo muối cùng cation trong tủ
   for (const tn of t.tints) blend(tn.hex, clamp(Math.pow(tn.mol / V / 0.004, 0.6), 0, 1));
   const ind = indicatorLook(t); if (ind && ind.hex && (ind.changed || t.indicator === 'quy')) blend(ind.hex, ind.color === 'hồng rất nhạt' ? 0.35 : t.indicator === 'quy' && !ind.changed ? 0.3 : 0.8);
   return { hex: '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join(''), opacity: op };
