@@ -172,7 +172,7 @@ export function mountDS(c) {
       btn('quiet icon-only menu-close', 'x', null, { 'aria-label': 'Đóng menu', onclick: () => app.classList.remove('menu-open') })
     ),
     el('nav', { class: 'nav-strip', 'aria-label': 'Điều hướng chính' },
-      el('button', { type: 'button', onclick: () => { location.href = './index.html'; } }, keycap('graduation-cap'), el('span', {}, 'Bài mẫu')),
+      el('button', { type: 'button', onclick: () => { location.href = './index.html?v=3'; } }, keycap('graduation-cap'), el('span', {}, 'Bài mẫu')),
       el('button', { type: 'button', 'aria-current': 'page' }, keycap('flask-conical'), el('span', {}, 'Thực hành')),
       bookBtn
     ),
