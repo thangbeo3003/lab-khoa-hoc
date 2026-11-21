@@ -5,7 +5,6 @@
 import { newTube, add, look, contents, label, isSolid, pptTotal, DROP_ML, MAX_ML, PIECE, litmus, heat, SPLINT } from './tubechem.js';
 import { BY_ID, CHEMS } from '../chem/data.js';
 import { pretty } from '../chem/formula.js';
-import { moles } from '../chem/engine.js';
 import { mountProcess3D } from './process3d.js';
 import { buildModel, population, entering } from './ionmodel.js';
 import { mountLens } from './lens3d.js';
@@ -28,6 +27,8 @@ const concText = (id) => { const c = BY_ID[id]; return id === 'H2O' ? 'nước c
 const chemName = (id) => `${label(id)}${BY_ID[id].conc && id !== 'H2O' ? ' ' + concText(id) : ''}`;
 const listLabel = (id) => (id === 'pp' ? 'PP' : label(id));
 const pieceUnit = (id) => (PIECE[id] || { unit: 'mẩu' }).unit;
+// Lượng chất (mmol) của MỘT mẩu chất rắn: hỏi thẳng sổ ống (thả thử một mẩu vào ống trống) để khung hạt luôn dùng đúng số của tubechem.js, kể cả chất không có trong PIECE (Na, CaO, CuO, MnO₂… = 0,2 g). Trước 21/11 chỗ này tự lấy 0,3 g nên lệch với sổ.
+const PIECE_MMOL = {}, pieceMmol = (id) => PIECE_MMOL[id] ?? (PIECE_MMOL[id] = (() => { const t = newTube(); add(t, id, { piece: true }); return (t.items[id] ? t.items[id].mol0 : 0) * 1000; })());
 const GAS_RATE = { 'rất mạnh': 1, 'mạnh': 0.85, 'vừa': 0.6, 'chậm': 0.32, 'nhẹ': 0.3, 'chậm dần rồi dừng': 0.4 };
 const FORM_PUFF = { 'keo': 1.7, 'bông': 1.5, 'vón cục': 1.1 };
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* không lưu được thì thôi */ } } };
@@ -63,7 +64,10 @@ function sync(ti, events = []) {
   const t = S.tubes[ti], V = bench.tubes[ti], L = look(t), slow = events.some((e) => e.slow);
   V.setLook({ mL: t.vol, hex: L.hex, opacity: L.opacity }, slow);
   for (const e of events) { if (e.kind !== 'reaction') continue;
-    for (const m of e.made) { if (m.mark === '↓') { const p = t.ppt.find((q) => q.f === m.f); V.precipitate(PPT_HEX[p.color] ?? 0xeef1f4, p.form, m.mol * 1000, layerH(t), e.slow); }
+    for (const m of e.made) { if (m.mark === '↓') { const p = t.ppt.find((q) => q.f === m.f);
+        // số mol âm = kết tủa tan (21/11, U2): chỉ hạ lớp đáy về mức còn lại, không rắc hạt rơi; màu lớp đáy theo kết tủa còn nhiều nhất. Bàn cũ không có dissolve() thì giữ cách cũ.
+        if (m.mol < 0 && V.dissolve) { const left = t.ppt.filter((q) => q.mol > 1e-9).sort((a, b) => b.mol - a.mol)[0]; V.dissolve(layerH(t), left ? PPT_HEX[left.color] ?? 0xeef1f4 : null); }
+        else V.precipitate(PPT_HEX[p.color] ?? 0xeef1f4, p.form, m.mol * 1000, layerH(t), e.slow); }
       if (m.mark === '↑') { const g = e.r.effects.find((x) => x.type === 'gas'), mmol = m.mol * 1000, rate = GAS_RATE[g?.rate] ?? 0.6, dur = e.slow ? Math.min(22, 9 + mmol * 10) : Math.min(5, 1.6 + mmol * 3); V.gas(rate, dur); sfx.fizz(rate, dur); S.gasUntil[ti] = performance.now() + dur * 1000; } } }
   for (const it of Object.values(t.items)) if (isSolid(it.id) && it.mol0 > 0) V.setSolid(it.id, it.mol / it.mol0, it.coat);
 }
@@ -74,8 +78,11 @@ const indSay = (e) => { const n = BY_ID[e.id].name; return e.changed ? `${n} chu
 function tubeTag(i) { const t = S.tubes[i]; bench.setTubeTag(i, `${Tn(i)}${t.vol > 0.001 ? `\n${fm(t.vol, t.vol < 1 ? 2 : 1)} mL` : ''}`); }
 function flash(i, text, calm = false) { bench.setFlash(i, text, calm); clearTimeout(flash.t); flash.t = setTimeout(() => bench.setFlash(i, ''), 3000); }
 function seenShort(events) {
-  const rx = events.filter((e) => e.kind === 'reaction'), ind = events.find((e) => e.kind === 'indicator'), out = [];
-  for (const e of rx) for (const f of e.r.effects) { if (f.type === 'ppt') out.push(`kết tủa ${f.color}`); else if (f.type === 'gas') out.push('sủi khí'); else if (f.type === 'color') out.push(`chuyển ${f.to}`); else if (f.type === 'coat') out.push('kim loại bám vào'); }
+  const rx = events.filter((e) => e.kind === 'reaction'), ind = events.find((e) => e.kind === 'indicator'), out = [], solid = [];
+  // Hiệu ứng "tan" của máy (21/11, U1): sự kiện có e.ppt = kết tủa gặp chất tan → nói "kết tủa tan dần" trước tiên, màu đi kèm là màu của dung dịch. Chất rắn khác tan (vôi sống, kim loại…) chỉ nêu khi không còn dấu hiệu nào khác, để không ra "không thấy bằng mắt".
+  for (const e of rx) { const tan = !!e.ppt && e.r.effects.some((f) => f.type === 'dissolve');
+    for (const f of e.r.effects) { if (f.type === 'ppt') out.push(`kết tủa ${f.color}`); else if (f.type === 'gas') out.push('sủi khí'); else if (f.type === 'color') out.push(tan ? `dung dịch ${f.to}` : `chuyển ${f.to}`); else if (f.type === 'coat') out.push('kim loại bám vào'); else if (f.type === 'dissolve') { if (tan) out.unshift('kết tủa tan dần'); else if (f.text) solid.push(low(f.text)); } } }
+  if (!out.length) out.push(...solid);
   if (ind) out.push(ind.changed ? `hoá ${ind.to}` : ind.from && !ind.from.includes('không') ? 'mất màu' : 'chỉ thị không đổi màu');
   if (out.length) return [...new Set(out)].join(', ');
   if (rx.length) return 'có phản ứng, không thấy bằng mắt';
@@ -96,7 +103,7 @@ function apply(ti, id, amt, how) {
   else if (res.events.length) S.last[ti] = { id, events: res.events, at: live ? performance.now() : 0 };
   else if (!prev || !prev.events.length) S.last[ti] = { id, events: [] };
   record(ti, id, amt, how, res.events);
-  lensFeed(ti, entering(id, amt.mL ? BY_ID[id].conc * amt.mL : amt.piece ? moles(id, { g: (PIECE[id] || { g: 0.3 }).g }) * 1000 : 0), res.events);
+  lensFeed(ti, entering(id, amt.mL ? BY_ID[id].conc * amt.mL : amt.piece ? pieceMmol(id) : 0), res.events);
   tubeTag(ti);
   const still = spent && prev.id === id && performance.now() - (prev.at || 0) < 4000; // cùng một lần rót: giữ nhãn hiện tượng vừa thấy
   const say = still ? seenShort(prev.events) : spent ? `${label(spent.a === id ? spent.b : spent.a)} đã hết` : seenShort(res.events);
@@ -293,7 +300,7 @@ function layoutLens() { const sw = $('stagewrap'), w = sw.clientWidth, h = sw.cl
   const dA = Math.max(160, Math.min(h - low, (w - hud) * 0.36)), rA = (dA + hud + 70) / w, dB = Math.min(h - 12 - 56 - HUD_MIN - 8, w * 0.3), rB = (dB + 56) / w;
   const stack = DS && !narrow && dB >= 260 && benchK(rB) >= benchK(rA) * 1.2; sw.classList.toggle('stack', stack);
   const d = stack ? dB : dA, left = stack ? w - 22 - d : w - hud - 40 - d, top = stack ? 12 : Math.max(10, (h - d - (low - 28)) / 2), L = $('lens'), C = $('lensCap'), T = $('lvTime'), HU = $('lensHud');
-  Object.assign(L.style, { left: left + 'px', top: top + 'px', width: d + 'px', height: d + 'px' }); C.style.display = capOff ? 'none' : ''; Object.assign(C.style, { left: left - 30 + 'px', width: d + 60 + 'px', top: top + d + 10 + 'px' }); if (T) Object.assign(T.style, { left: left + 'px', width: d + 'px', top: top + d + (stack ? 10 : capOff ? 16 : 44) + 'px' });
+  Object.assign(L.style, { left: left + 'px', top: top + 'px', width: d + 'px', height: d + 'px' }); C.style.display = capOff ? 'none' : ''; Object.assign(C.style, { left: left - 30 + 'px', width: d + 60 + 'px', top: top + d + 10 + 'px' }); if (T) { const tw = Math.max(d, 240), tl = Math.max(8, Math.min(left + (d - tw) / 2, w - 8 - tw)); Object.assign(T.style, { left: tl + 'px', width: tw + 'px', top: top + d + (stack ? 10 : capOff ? 16 : 44) + 'px' }); } // 21/11 (A7·F3): vòng kính nhỏ hơn 240 px thì thanh tua vẫn rộng 240, canh giữa dưới vòng kính và không vượt mép phải sân khấu (trước đây nút "Hiện tại" bị cắt ở 1024 px)
   if (HU) Object.assign(HU.style, stack ? { left: left - 10 + 'px', width: d + 20 + 'px', top: top + d + 10 + 46 + 8 + 'px' } : { left: '', width: '', top: '' });
   // hộp zoom hạt: nằm cạnh tiêu đề bảng "Bên trong ống" (không đè viền vòng kính, không lẫn với hộp zoom bàn); bảng ẩn thì nổi ở góc vòng kính như cũ
   if (LZ.box) { if (narrow) { if (LZ.box.parentElement !== sw) sw.appendChild(LZ.box); LZ.box.classList.remove('in-hud'); Object.assign(LZ.box.style, { left: left + d - 104 + 'px', top: Math.max(4, top - 6) + 'px' }); } else { if (LZ.box.parentElement !== HUD.head) HUD.head.appendChild(LZ.box); LZ.box.classList.add('in-hud'); LZ.box.style.left = LZ.box.style.top = ''; } }
@@ -324,7 +331,7 @@ function renderLens() {
     HUD.head = el('div', { class: 'hud-head' }, HUD.title); put($('lensHud'), HUD.head, HUD.sub, HUD.list, HUD.evt, HUD.again);
     buildTimeline(); lens = mountLens($('lens'), { tintEl: $('lensTint'), onTime: renderTime, onStats: (rows, U, pending, scrub, rescaled) => { const W = { ion: 'trong dung dịch', mol: 'trong dung dịch', ppt: 'kết tủa, nằm ở đáy', solid: 'chất rắn chưa tan' }, ord = { solid: 0, ion: 1, mol: 1, ppt: 2 };
       HUD.sub.textContent = scrub ? 'Đang xem lại: số hạt bên dưới là của thời điểm đang tua, không phải lúc này.' : `Phóng to minh hoạ: 1 hạt ≈ ${String(U).replace('.', ',')} mmol, không vẽ nước.${rescaled ? ' Vừa đổi thang vì lượng chất nhiều lên: số hạt giảm nhưng lượng chất không đổi.' : ''}${pending ? ` Đang quay chậm, còn ${pending} lượt gặp nhau.` : ''}`;
-      put(HUD.list, rows.length ? rows.sort((a, b) => ord[a.kind] - ord[b.kind]).map((r) => el('div', { class: `hud-it ${r.kind}${r.n ? '' : ' zero'}` }, el('i', { style: `background:${r.color}` }), el('b', {}, r.label + (r.kind === 'ppt' ? '↓' : '')), el('em', {}, `${r.n} hạt`), el('small', {}, `${scrub ? '≈ ' : ''}${fm(r.mmol, 2)} mmol · ${r.kind === 'ppt' && r.note ? `chất rắn${r.form === 'keo' || r.form === 'bông' ? ' dạng ' + r.form : ''} màu ${r.note}, nằm ở đáy` : (W[r.kind] || '') + (r.label === 'H⁺' ? ' (trong nước là H₃O⁺)' : '')}`))) : el('p', { class: 'sub' }, 'Chưa có hạt nào.'));
+      put(HUD.list, rows.length ? rows.sort((a, b) => ord[a.kind] - ord[b.kind]).map((r) => el('div', { class: `hud-it ${r.kind}${r.n ? '' : ' zero'}` }, el('i', { style: `background:${r.color}` }), el('b', {}, r.label + (r.kind === 'ppt' ? '↓' : '')), el('em', {}, `${r.n} hạt`), el('small', {}, el('span', { class: 'num' }, `${scrub ? '≈ ' : ''}${fm(r.mmol, 2)} mmol`), ` · ${r.kind === 'ppt' && r.note ? `chất rắn${r.form === 'keo' || r.form === 'bông' ? ' dạng ' + r.form : ''} màu ${r.note}, nằm ở đáy` : (W[r.kind] || '') + (r.label === 'H⁺' ? ' (trong nước là H₃O⁺)' : '')}`))) : el('p', { class: 'sub' }, 'Chưa có hạt nào.'));
       for (const n of HUD.list.querySelectorAll('small')) n.title = n.textContent; // bảng dạng gọn cắt chú thích còn một dòng: rê chuột vẫn đọc được đủ
       // design system: nhãn hạt chia nhóm Tạo thành / Còn lại (sau khi đã có phản ứng), để ion không đổi có chỗ riêng
       if (UI && !scrub && rows.length) { const m = modelOf(S.tube), made = m ? new Set(m.rhs.map((x) => x.label)) : null; if (made) { const kids = [...HUD.list.children], g1 = [], g2 = []; rows.forEach((r, k) => (made.has(r.label) ? g1 : g2).push(kids[k])); put(HUD.list, g1.length ? el('p', { class: 'hud-group' }, 'Tạo thành') : null, g1, g2.length ? el('p', { class: 'hud-group' }, 'Còn lại') : null, g2); } } } });

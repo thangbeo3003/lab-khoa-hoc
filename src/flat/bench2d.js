@@ -12,7 +12,7 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v)), lerp = (a, b, k) => a + 
 const rgb = (hex) => [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16));
 const rgba = (hex, a, mul = 1) => { const c = rgb(hex).map((v) => Math.round(clamp(v * mul, 0, 255))); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; };
 const css = (n) => (typeof n === 'string' ? n : '#' + n.toString(16).padStart(6, '0'));
-const FONT = '-apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+const FONT = (document.documentElement.dataset.font === 'plex' ? '"IBM Plex Sans", ' : '') + '-apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
 const META = await (await fetch('./assets/flat/meta.json?' + Date.now())).json();
 const IM = {}; await Promise.all(Object.keys(META).map((k) => new Promise((res) => { const i = new Image(); i.onload = () => { IM[k] = i; res(); }; i.onerror = () => res(); i.src = './assets/flat/' + META[k].file; })));
 
@@ -78,7 +78,9 @@ export function createFreeBench(host, { nameOf = (id) => id, theme = {} } = {}) 
   const mouthY = (T) => T.by - T.len, floorY = (T) => T.by - T.m.floor * T.s;
   const mkTube = (hx, i, kind = 'tube', name = `Ống ${'ABCDE'[i]}`) => ({ i, kind, name, on: kind === 'tube', pop: 1, ...GEO[kind], x: kind === 'tube' ? rX(hx) : hx, mL: 0, mLto: 0, col: '#dcecf5', op: 0.3, layer: 0, layerTo: 0, lcol: '#ffffff', parts: [], bub: [], gasT: 0, gasI: 0, solids: {}, pose: null, stream: null, tag: '', spill: 1,
     setLook({ mL, hex, opacity }) { this.mLto = mL; this.col = hex; this.op = opacity; },
-    precipitate(hex, form, mmol, layerH) { this.lcol = css(hex); this.layerTo = Math.max(layerH * 10 * this.layerK, Math.min(0.25, layerH * 10)); const n = Math.round(clamp(mmol * 260, 8, 46)), top = this.lev(Math.max(this.mLto, 0.3)); for (let k = 0; k < n && this.parts.length < 130; k++) this.parts.push({ x: (Math.random() * 2 - 1) * 0.82, y: top * (0.3 + Math.random() * 0.65), r: (form === 'keo' || form === 'bông' ? 0.05 : 0.032) + Math.random() * 0.045, v: 0.22 + Math.random() * 0.35, w: Math.random() * 6.28, col: this.lcol }); },
+    precipitate(hex, form, mmol, layerH) { this.melt = 0; this.lcol = css(hex); this.layerTo = Math.max(layerH * 10 * this.layerK, Math.min(0.25, layerH * 10)); const n = Math.round(clamp(mmol * 260, 8, 46)), top = this.lev(Math.max(this.mLto, 0.3)); for (let k = 0; k < n && this.parts.length < 130; k++) this.parts.push({ x: (Math.random() * 2 - 1) * 0.82, y: top * (0.3 + Math.random() * 0.65), r: (form === 'keo' || form === 'bông' ? 0.05 : 0.032) + Math.random() * 0.045, v: 0.22 + Math.random() * 0.35, w: Math.random() * 6.28, col: this.lcol }); },
+    // Kết tủa tan (21/11, U2): lớp đáy rút từ từ về mức còn lại (layerH = 0 là tan hết), KHÔNG rắc hạt mới; tan hết thì các hạt còn lơ lửng nhỏ dần rồi mất. hex = màu kết tủa còn lại (null: giữ màu cũ).
+    dissolve(layerH, hex) { if (hex != null) this.lcol = css(hex); this.layerTo = layerH > 0 ? Math.max(layerH * 10 * this.layerK, Math.min(0.25, layerH * 10)) : 0; if (layerH <= 0) this.melt = 2.5; },
     gas(intensity, dur) { this.gasI = intensity; this.gasT = dur; },
     setSolid(id, frac, coat) { const s = this.solids[id] || (this.solids[id] = { k: 1, tk: 1, coat: null, seed: Math.random() * 9 }); s.tk = frac; if (coat) s.coat = COAT[coat] || '#8c9199'; },
     resuspend() { if (this.layer < 0.04) return; const n = Math.round(clamp(this.layer * 50, 10, 60)), top = this.lev(this.mL); this.layer *= 0.25; for (let k = 0; k < n; k++) this.parts.push({ x: (Math.random() * 2 - 1) * 0.82, y: top * Math.random() * 0.9, r: 0.03 + Math.random() * 0.04, v: 0.2 + Math.random() * 0.3, w: Math.random() * 6.28, col: this.lcol }); },
@@ -115,6 +117,7 @@ export function createFreeBench(host, { nameOf = (id) => id, theme = {} } = {}) 
     for (const T of tubes) {
       T.mL = lerp(T.mL, T.mLto, 1 - Math.exp(-dt * 10)); T.layer = lerp(T.layer, T.layerTo, 1 - Math.exp(-dt * 0.9));
       for (const p of T.parts) { p.y -= p.v * dt; p.w += dt * 2; p.x = clamp(p.x + Math.sin(p.w) * dt * 0.15, -0.85, 0.85); } T.parts = T.parts.filter((p) => p.y > T.layer * 0.8);
+      if (T.melt > 0) { T.melt -= dt; const k = Math.exp(-dt * 2.2); for (const p of T.parts) p.r *= k; T.parts = T.parts.filter((p) => p.r > 0.012); } // kết tủa vừa tan hết: hạt lơ lửng nhỏ dần rồi mất
       if (T.gasT > 0) { T.gasT -= dt; const top = T.lev(T.mL); if (Math.random() < T.gasI * dt * 34 && T.bub.length < 46 && top > 0.2) T.bub.push({ x: (Math.random() * 2 - 1) * 0.7, y: Math.random() * top * 0.25, r: 0.03 + Math.random() * 0.05, v: 1.6 + Math.random() * 1.8 }); }
       T.pop = Math.min(1, T.pop + dt / 0.22); const top = T.lev(T.mL); for (const b of T.bub) { b.y += b.v * dt; b.x = clamp(b.x + (Math.random() - 0.5) * dt * 0.8, -0.8, 0.8); } T.bub = T.bub.filter((b) => b.y < top);
       for (const s of Object.values(T.solids)) s.k = lerp(s.k, s.tk, 1 - Math.exp(-dt * 0.8));

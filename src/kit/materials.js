@@ -14,7 +14,9 @@ export const PAL = {
 export const ATOM = { H: '#ffffff', C: '#3a3f47', O: '#e03a3a', N: '#3b6fe0', Cl: '#3fae4a', Ca: '#9fb8b0', pos: '#f08a24', neg: '#8a5ad6' };
 
 export const QUALITY = { mobile: false };
-export const FONT = '"Be Vietnam Pro", -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+// IBM Plex (chủ chốt 21/11): trang thực hành có data-font=plex; bài học bản 3 nạp ds_font.js sau khi module này đã chạy nên xét thẳng ?v=3. Bản 1, bản 2 không đổi.
+const PLEX = document.documentElement.dataset.font === 'plex' || (/[?&]v=3(?!\d)/.test(location.search) && !/[?&]font=(inter|inter2|bevn)\b/.test(location.search));
+export const FONT = (PLEX ? '"IBM Plex Sans", ' : '') + '"Be Vietnam Pro", -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 // Thuỷ tinh: mặt ngoài bắt phản chiếu, mặt trong mờ hơn để thấy độ dày thành.
 export function glassMat(color = 0xffffff, opacity = 0.16, side = THREE.FrontSide) {

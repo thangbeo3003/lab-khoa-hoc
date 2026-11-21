@@ -1,0 +1,72 @@
+/* Bản thử kiểu chữ của Bàn thực hành (21/11, fork L2·UX). Chủ: "Dựng bản so sánh".
+   Tệp này CHỈ được nạp khi địa chỉ có ?font=, &pt= hoặc &bo= (xem ds_font.js). Không sửa luật nào của ds.css, free.css; mọi luật ở đây là ghi đè có tiền tố html[data-…].
+   ?font=inter2  Inter hạ độ đậm (trần 600), số đo tabular-nums
+   ?font=plex    IBM Plex Sans + IBM Plex Mono cho số đo, độ đậm như inter2
+   ?font=bevn    Be Vietnam Pro 400 / 500 + IBM Plex Mono cho số đo
+   &pt=mono      phương trình cũng dùng font mono        &bo=10  phím dụng cụ bo 10 px */
+
+/* ---------- 1. Tệp font ---------- */
+/* Inter L2: cùng hai tệp Inter đang chạy (tệp có trục đậm 100–900) nhưng khai dải 400–600, nên mọi chỗ xin 650 / 700 / 800 đều dừng ở 600 mà không phải sửa từng luật. */
+@font-face { font-family:'Inter L2'; font-style:normal; font-weight:400 600; font-display:swap; src:url(../../assets/ds/inter-vietnamese.woff2) format('woff2'); unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB; }
+@font-face { font-family:'Inter L2'; font-style:normal; font-weight:400 600; font-display:swap; src:url(../../assets/ds/inter-latin.woff2) format('woff2'); unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+
+/* Be Vietnam Pro 400 + 500 (OFL, tệp chép từ mockup_design_system/assets, giấy phép: assets/ds/OFL-Be-Vietnam-Pro.txt) */
+@font-face { font-family:'Be Vietnam Pro'; font-style:normal; font-weight:400; font-display:swap; src:url(../../assets/ds/be-vietnam-400-vietnamese.woff2) format('woff2'); unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB; }
+@font-face { font-family:'Be Vietnam Pro'; font-style:normal; font-weight:400; font-display:swap; src:url(../../assets/ds/be-vietnam-400-latin.woff2) format('woff2'); unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'Be Vietnam Pro'; font-style:normal; font-weight:500; font-display:swap; src:url(../../assets/ds/be-vietnam-500-vietnamese.woff2) format('woff2'); unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB; }
+@font-face { font-family:'Be Vietnam Pro'; font-style:normal; font-weight:500; font-display:swap; src:url(../../assets/ds/be-vietnam-500-latin.woff2) format('woff2'); unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+
+/* IBM Plex Sans 400 / 500 / 600 và IBM Plex Mono 400 / 500 (OFL). CHƯA CÓ TỆP: chờ chủ xác nhận cho tải (21/11). Tên tệp đặt sẵn theo tên gốc của kho IBM/plex (bản đủ bộ ký tự, không cắt theo dải, để chỉ số ₂ ⁺ → cũng vẽ bằng Plex).
+   Khi tệp chưa về, trình duyệt báo 404 cho các tệp này rồi rơi về font kế tiếp trong --font / --mono. */
+@font-face { font-family:'IBM Plex Sans'; font-style:normal; font-weight:400; font-display:swap; src:url(../../assets/ds/IBMPlexSans-Regular.woff2) format('woff2'); }
+@font-face { font-family:'IBM Plex Sans'; font-style:normal; font-weight:500; font-display:swap; src:url(../../assets/ds/IBMPlexSans-Medium.woff2) format('woff2'); }
+@font-face { font-family:'IBM Plex Sans'; font-style:normal; font-weight:600; font-display:swap; src:url(../../assets/ds/IBMPlexSans-SemiBold.woff2) format('woff2'); }
+@font-face { font-family:'IBM Plex Mono'; font-style:normal; font-weight:400; font-display:swap; src:url(../../assets/ds/IBMPlexMono-Regular.woff2) format('woff2'); }
+@font-face { font-family:'IBM Plex Mono'; font-style:normal; font-weight:500; font-display:swap; src:url(../../assets/ds/IBMPlexMono-Medium.woff2) format('woff2'); }
+
+/* ---------- 2. Biến theo từng kiểu ---------- */
+html[data-ui="ds"] { --mono:'IBM Plex Mono', ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace; }
+html[data-ui="ds"][data-font="inter2"] { --font:'Inter L2', system-ui, -apple-system, "Segoe UI", sans-serif; --fw-b:600; --fw-m:500; }
+html[data-ui="ds"][data-font="plex"]   { --font:'IBM Plex Sans', 'Inter L2', system-ui, -apple-system, "Segoe UI", sans-serif; --fw-b:600; --fw-m:500; }
+html[data-ui="ds"][data-font="bevn"]   { --font:'Be Vietnam Pro', system-ui, -apple-system, "Segoe UI", sans-serif; --fw-b:500; --fw-m:500; }
+/* Không cho trình duyệt tự tô đậm giả khi font không có mức đậm được xin (Plex Mono, Be Vietnam Pro chỉ tới 500). */
+html[data-font] .ds, html[data-pt] .ds { font-synthesis-weight:none; }
+
+/* ---------- 3. Hạ độ đậm (áp cho inter2, plex, bevn) ---------- */
+/* Mức 650 / 700 / 800 → 600 nhờ dải của @font-face (bevn → 500). Dưới đây là những chỗ hạ thêm theo define: tiêu đề 600, nút chính 600, nút phụ và nhãn dụng cụ 500. */
+html[data-font] .ds b, html[data-font] .ds strong, html[data-font] .ds h1, html[data-font] .ds h2, html[data-font] .ds h3 { font-weight:var(--fw-b); }
+html[data-font] .ds .page-heading h1, html[data-font] .ds .cab-heading h2, html[data-font] .ds dialog h2, html[data-font] .ds .lb-book h2, html[data-font] .ds .hud-head h2 { font-weight:var(--fw-b); }
+html[data-font] .ds .primary { font-weight:var(--fw-b); }
+html[data-font] .ds .quiet, html[data-font] .ds .secondary { font-weight:var(--fw-m); }
+html[data-font] .ds .app-nav button { font-weight:var(--fw-m); }
+html[data-font] .ds .app-nav button[aria-current="page"], html[data-font] .ds .app-nav button[aria-expanded="true"] { font-weight:var(--fw-b); }
+html[data-font] .ds .segmented-track > button { font-weight:var(--fw-m); }
+html[data-font] .ds .segmented-track > button[aria-pressed="true"] { font-weight:var(--fw-b); }
+html[data-font] .ds .brand, html[data-font] .ds .nav-caption, html[data-font] .ds .tier-label, html[data-font] .ds .dose-field > span, html[data-font] .ds .dose-field > label,
+html[data-font] .ds .dose-chem, html[data-font] .ds .hud-group, html[data-font] .ds .on-bench, html[data-font] .ds .soon-tag, html[data-font] .ds .use-tag, html[data-font] .ds .count,
+html[data-font] .ds .result .equation, html[data-font] .ds .layer-content .eq, html[data-font] .ds .layer-content h3, html[data-font] .ds .filters .lbl, html[data-font] .ds .tool-group,
+html[data-font] .ds .chem-row b, html[data-font] .ds .tube-selector button b, html[data-font] .ds .hud-it em, html[data-font] .ds .dose-amount input { font-weight:var(--fw-b); }
+/* Khoảng cách chữ âm của ds.css được chỉnh cho Inter; Plex và Be Vietnam Pro để về 0 cho khỏi dính nét. */
+html[data-font="plex"] .ds .brand, html[data-font="bevn"] .ds .brand { letter-spacing:-.01em; }
+html[data-font="plex"] .ds .page-heading h1, html[data-font="bevn"] .ds .page-heading h1, html[data-font="plex"] .ds .result .equation, html[data-font="bevn"] .ds .result .equation { letter-spacing:0; }
+
+/* ---------- 4. Số đo ---------- */
+/* Danh sách chỗ hiện số đo: ô lượng, thể tích từng bình, số hạt, số mmol trong bảng đếm, lượng ở đồ thị nhỏ, nồng độ trong tủ, mức zoom, số đếm Sổ, nhãn thời điểm thanh tua. */
+html[data-font] .ds #amount, html[data-font] .ds .tube-selector .reading, html[data-font] .ds .hud-it em, html[data-font] .ds .hud-it small .num, html[data-font] .ds .result .spark span,
+html[data-font] .ds .chem-row:not(.tool-row) .chem-meta, html[data-font] .ds .lk-zoom button:nth-child(2), html[data-font] .ds .lens-zoom button:nth-child(2), html[data-font] .ds .count, html[data-font] .ds .tl-lab,
+html[data-font] .ds .dose-chem, html[data-font] .ds .lens-hud .sub { font-variant-numeric:tabular-nums; }
+/* plex, bevn: các chỗ thuần số đo dùng font mono. Tên chất, mô tả đi kèm giữ font chữ thường. */
+html:is([data-font="plex"],[data-font="bevn"]) .ds #amount, html:is([data-font="plex"],[data-font="bevn"]) .ds .tube-selector .reading, html:is([data-font="plex"],[data-font="bevn"]) .ds .hud-it em,
+html:is([data-font="plex"],[data-font="bevn"]) .ds .hud-it small .num, html:is([data-font="plex"],[data-font="bevn"]) .ds .result .spark span, html:is([data-font="plex"],[data-font="bevn"]) .ds .chem-row:not(.tool-row) .chem-meta,
+html:is([data-font="plex"],[data-font="bevn"]) .ds .lk-zoom button:nth-child(2), html:is([data-font="plex"],[data-font="bevn"]) .ds .lens-zoom button:nth-child(2), html:is([data-font="plex"],[data-font="bevn"]) .ds .count { font-family:var(--mono); letter-spacing:0; }
+html:is([data-font="plex"],[data-font="bevn"]) .ds #amount, html:is([data-font="plex"],[data-font="bevn"]) .ds .hud-it em, html:is([data-font="plex"],[data-font="bevn"]) .ds .count,
+html:is([data-font="plex"],[data-font="bevn"]) .ds .lk-zoom button:nth-child(2), html:is([data-font="plex"],[data-font="bevn"]) .ds .lens-zoom button:nth-child(2) { font-weight:500; }
+/* phần chữ nằm lẫn trong khối số đo trở lại font chữ thường */
+html:is([data-font="plex"],[data-font="bevn"]) .ds .result .spark span b, html:is([data-font="plex"],[data-font="bevn"]) .ds .result .spark span small, html:is([data-font="plex"],[data-font="bevn"]) .ds .chem-meta .on-bench { font-family:var(--font); }
+
+/* ---------- 5. &pt=mono: phương trình dùng font mono ---------- */
+html[data-pt="mono"] .ds .result .equation, html[data-pt="mono"] .ds .hud-evt b, html[data-pt="mono"] .ds .layer-content .eq { font-family:var(--mono); font-weight:500; letter-spacing:0; }
+html[data-pt="mono"] .ds .result .equation small, html[data-pt="mono"] .ds .layer-content .eq small { font-family:var(--font); }
+
+/* ---------- 6. &bo=10: phím dụng cụ bo 10 px thay vì dạng viên ---------- */
+html[data-bo="10"] .ds .tier.tools .tool-bar:not(.end) button { border-radius:10px; }

@@ -279,3 +279,31 @@ html[data-ui="ds"] body { background:var(--canvas); color:var(--text); font:400 
 .lb.ds .chem-row.has-thumb:not(.tool-row):has(.on-bench) .on-bench { grid-column:2 / -1; grid-row:2; justify-self:start; }
 /* 21/11 (fork L2·UX, A2): chữ tối thiểu 11 px ở trang L2 (chuẩn UI 20/11). Ghi đè riêng cho .lb, luật gốc ở trên giữ nguyên vì L1 đang dùng. */
 .lb.ds .nav-caption, .lb.ds .on-bench, .lb.ds .soon-tag, .lb.ds .use-tag { font-size:11px; }
+/* 21/11 (fork L2·UX, A7): bản chính ở màn hẹp (tới 1200 px) không tràn mép. Chỉ áp cho trang L2 bố cục gốc (.lb, không .v2).
+   F4: thanh thao tác bỏ dòng nhắc (vốn đã co về 0), thu khoảng cách, ô tên chất co trước; nút chính không lồi khỏi khung, cả hàng vẫn một dòng.
+   F5: ô chọn bình xếp tên trên, lượng dưới (như khi có từ 7 bình) để chữ không tràn khỏi ô.
+   F3: thanh tua gọn lại khi bảng đếm ẩn (đi cùng sửa bề rộng thanh tua trong lab.js layoutLens). */
+@media (max-width:1200px) {
+  .lb.ds:not(.v2) .dose-bar { gap:8px; } /* vẫn một dòng: xuống dòng thì sân khấu thấp đi, vòng kính tràn xuống bộ chọn bình */
+  .lb.ds:not(.v2) .dose-bar .dose-hint { display:none; }
+  .lb.ds:not(.v2) .dose-bar .dose-field { padding-right:8px; }
+  .lb.ds:not(.v2) .dose-bar .dose-field.reagent { min-width:56px; } /* ô tên chất co trước (tên dài hiện "…"), nhường chỗ cho nút */
+  .lb.ds:not(.v2) .dose-bar .quiet { flex:none; margin-left:auto; padding-inline:8px; }
+  .lb.ds:not(.v2) .dose-bar .quiet svg { display:none; } /* "Thêm lần nữa" giữ chữ, bỏ icon trang trí */
+  .lb.ds:not(.v2) .dose-bar .primary { flex:none; min-width:0; } /* nút chính không co, chữ không bị cắt */
+  .lb.ds:not(.v2) .tube-selector button { flex-direction:column; gap:0; min-height:44px; line-height:1.2; white-space:normal; text-align:center; }
+  .lb.ds:not(.v2) .tube-selector button svg { display:none; }
+  .lb.ds:not(.v2) .nohud .lv-time { gap:6px; padding-inline:8px; }
+  .lb.ds:not(.v2) .nohud .lv-time .tl-track { min-width:44px; }
+}
+/* 21/11 (fork L2·UX, A9): tiêu đề bảng đếm "Bên trong ống đong / bình tam giác…" được xuống dòng, không cắt bằng dấu "…". */
+.lb.ds .hud-head { align-items:flex-start; }
+.lb.ds .hud-head h2 { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.25; overflow-wrap:break-word; }
+/* A7 (bổ sung): ở mọi bề rộng, nút chính của bản chính không co nhỏ hơn chữ của nó (tên bình dài như "bình tam giác" từng tràn khỏi viên nút ở khoảng 1201–1300 px); ô tên chất và dòng nhắc co thay. */
+.lb.ds:not(.v2) .dose-bar .primary { flex:none; }
+/* A7 (bổ sung): 821–960 px thanh thao tác không còn đủ chỗ cho một dòng. Ô tên chất co hết mức trước; vẫn thiếu thì nút chính xuống dòng, nằm sát phải (không bị cắt ở mép màn). Từ 820 px trở xuống đã có luật riêng ở trên. */
+@media (min-width:821px) and (max-width:960px) {
+  .lb.ds:not(.v2) .dose-bar { flex-wrap:wrap; }
+  .lb.ds:not(.v2) .dose-bar .dose-field.reagent { flex:1 1 56px; max-width:clamp(120px, 16vw, 220px); }
+  .lb.ds:not(.v2) .dose-bar .primary { margin-left:auto; }
+}
