@@ -16,6 +16,13 @@ export const ANIONS = {
 // group: acid | base | salt | metal | solid | indicator | other. ions: [cation, số cation, anion, số anion].
 // ph: pH gần đúng của chính dung dịch đó ở nồng độ ghi. color: màu nhìn thấy.
 const C = (id, f, name, group, extra) => ({ id, f, name, group, ...extra });
+// Câu cảnh báo an toàn cho kim loại kiềm (chất có cờ alkali). Sổ ống nghiệm gắn vào r.safety của sự kiện phản ứng để giao diện hiện.
+// Không ghi con số. Với nước: Chemguide, "Reactions of the Group 1 elements with water" ("All of these metals react vigorously or even explosively
+// with cold water", đọc trực tiếp 21/11). Với acid: kiến thức phổ thông, CHƯA có nguồn đọc trực tiếp, chưa có giáo viên duyệt.
+export const ALKALI_SAFETY = {
+  water: 'An toàn: kim loại kiềm phản ứng mãnh liệt với nước, toả nhiều nhiệt, khí hydrogen có thể bốc cháy hoặc nổ. Ngoài thật chỉ giáo viên làm, với một mẩu rất nhỏ và có tấm chắn.',
+  acid: 'An toàn: kim loại kiềm phản ứng rất mãnh liệt với dung dịch acid, có thể gây nổ. Ngoài thật không làm thí nghiệm này; ở đây chỉ là mô phỏng.',
+};
 export const CHEMS = [
   C('HCl', 'HCl', 'Hydrochloric acid', 'acid', { conc: 1.0, ions: ['H', 1, 'Cl', 1], strong: true, ph: 0, color: 'không màu' }),
   C('H2SO4', 'H2SO4', 'Sulfuric acid loãng', 'acid', { conc: 0.5, ions: ['H', 2, 'SO4', 1], strong: true, ph: 0, color: 'không màu' }),
@@ -42,7 +49,7 @@ export const CHEMS = [
   C('NH4Cl', 'NH4Cl', 'Ammonium chloride', 'salt', { conc: 0.5, ions: ['NH4', 1, 'Cl', 1], ph: 4.8, color: 'không màu' }),
   C('KMnO4', 'KMnO4', 'Potassium permanganate (thuốc tím)', 'salt', { conc: 0.01, ions: ['K', 1, 'MnO4', 1], ph: 7, color: 'tím', hex: '#8d3a9c', special: true }),
   C('KSCN', 'KSCN', 'Potassium thiocyanate', 'salt', { conc: 0.1, ions: ['K', 1, 'SCN', 1], ph: 7, color: 'không màu' }),
-  C('Na', 'Na', 'Sodium', 'metal', { valence: 1, color: 'trắng bạc' }),
+  C('Na', 'Na', 'Sodium', 'metal', { valence: 1, color: 'trắng bạc', alkali: true }), // alkali: kim loại kiềm (luật nước, an toàn: ALKALI_SAFETY)
   C('Mg', 'Mg', 'Magnesium', 'metal', { valence: 2, color: 'trắng bạc' }),
   C('Al', 'Al', 'Aluminium', 'metal', { valence: 3, color: 'trắng bạc' }),
   C('Zn', 'Zn', 'Zinc', 'metal', { valence: 2, color: 'xám' }),

@@ -2,7 +2,7 @@
 // Bố cục chốt 18/11 đêm: thanh thao tác trên bàn (bước hiện tại · chất đang chọn · lượng), bàn lab là khung to không có chữ đè,
 // dải kết quả dưới bàn, tủ hoá chất cố định bên trái trên màn rộng hoặc thành khay trên màn hẹp, khay Dụng cụ, sổ thu gọn.
 // Luồng chính: chọn chất → chỉnh lượng → chạm ống → thấy phản hồi ngay trên ống. Rót xong vẫn giữ chất đã chọn để thử ống khác.
-import { newTube, add, look, contents, label, isSolid, pptTotal, DROP_ML, MAX_ML, PIECE, litmus, heat, SPLINT } from './tubechem.js';
+import { newTube, add, beginPour, endPour, look, contents, label, isSolid, pptTotal, DROP_ML, MAX_ML, PIECE, litmus, heat, SPLINT } from './tubechem.js';
 import { BY_ID, CHEMS } from '../chem/data.js';
 import { pretty } from '../chem/formula.js';
 import { mountProcess3D } from './process3d.js';
@@ -81,48 +81,103 @@ function seenShort(events) {
   const rx = events.filter((e) => e.kind === 'reaction'), ind = events.find((e) => e.kind === 'indicator'), out = [], solid = [];
   // Hiệu ứng "tan" của máy (21/11, U1): sự kiện có e.ppt = kết tủa gặp chất tan → nói "kết tủa tan dần" trước tiên, màu đi kèm là màu của dung dịch. Chất rắn khác tan (vôi sống, kim loại…) chỉ nêu khi không còn dấu hiệu nào khác, để không ra "không thấy bằng mắt".
   for (const e of rx) { const tan = !!e.ppt && e.r.effects.some((f) => f.type === 'dissolve');
-    for (const f of e.r.effects) { if (f.type === 'ppt') out.push(`kết tủa ${f.color}`); else if (f.type === 'gas') out.push('sủi khí'); else if (f.type === 'color') out.push(tan ? `dung dịch ${f.to}` : `chuyển ${f.to}`); else if (f.type === 'coat') out.push('kim loại bám vào'); else if (f.type === 'dissolve') { if (tan) out.unshift('kết tủa tan dần'); else if (f.text) solid.push(low(f.text)); } } }
+    for (const f of e.r.effects) { if (f.type === 'ppt') out.push(`kết tủa ${f.color}`); else if (f.type === 'gas') out.push(/mạnh/.test(f.rate || '') ? `sủi khí ${f.rate}` : 'sủi khí'); else if (f.type === 'color') out.push(tan ? `dung dịch ${f.to}` : `chuyển ${f.to}`); else if (f.type === 'coat') out.push('kim loại bám vào'); else if (f.type === 'dissolve') { if (tan) out.unshift('kết tủa tan dần'); else if (f.text) solid.push(low(f.text)); } } }
   if (!out.length) out.push(...solid);
   if (ind) out.push(ind.changed ? `hoá ${ind.to}` : ind.from && !ind.from.includes('không') ? 'mất màu' : 'chỉ thị không đổi màu');
   if (out.length) return [...new Set(out)].join(', ');
   if (rx.length) return 'có phản ứng, không thấy bằng mắt';
-  return events[0] ? (events[0].kind === 'none' ? 'không có hiện tượng' : 'app chưa có dữ liệu') : '';
+  return events[0] ? (events[0].r?.observation || (events[0].kind === 'none' ? 'không có hiện tượng' : 'app chưa có dữ liệu')) : '';
 }
 
 // Thêm chất vào ống ti: cập nhật sổ sách, hình, nhãn, sổ thí nghiệm.
 function apply(ti, id, amt, how) {
   const t = S.tubes[ti], res = add(t, id, amt);
   if (res.full) { toast(`${Tn(ti)} đã đầy (chứa tối đa ${capOf(ti)} mL). Đổ bỏ hoặc chọn bình khác.`); return false; }
+  return absorb(ti, id, amt, how, res);
+}
+// Nhận sự kiện sổ trả về (của một phần rót, hoặc của endPour khi đóng lần rót: amt = { close: true }) và cập nhật hình, nhãn, dải kết quả, sổ, vòng kính, đồ thị.
+function absorb(ti, id, amt, how, res) {
   sync(ti, res.events);
   let fresh = false;
   for (const e of res.events) if (e.kind === 'reaction' && e.r.equation) { if (!S.sum[ti][e.r.equation]) fresh = true; S.sum[ti][e.r.equation] = (S.sum[ti][e.r.equation] || 0) + e.extent; addMade(ti, e); } // cộng dồn theo từng phương trình
   curvePoint(ti);
-  const prev = S.last[ti], live = res.events.some((e) => e.kind === 'reaction' || e.kind === 'indicator');
-  const spent = !live && prev && prev.events.find((e) => e.kind === 'reaction' && (e.a === id || e.b === id)); // chất kia đã hết: thêm nữa không tạo thêm sản phẩm
-  if (spent) prev.over = { id, other: spent.a === id ? spent.b : spent.a };
-  else if (res.events.length) S.last[ti] = { id, events: res.events, at: live ? performance.now() : 0 };
+  // Gom theo lần bấm: acc = mọi sự kiện của cả lần thêm này (một phần rót thì acc chính là phần đó).
+  const B = BATCH && BATCH.ti === ti && BATCH.id === id ? BATCH : null;
+  const acc = B ? mergeEvents(B.events, res.events) : res.events;
+  const prev = B ? B.prev : S.last[ti], live = acc.some((e) => e.kind === 'reaction' || e.kind === 'indicator');
+  // "Chất kia đã hết" chỉ khi CẢ lần thêm không có phản ứng nào; trong cùng một lần rót, phần sau im lặng là bình thường.
+  const spent = !live && prev && prev.events.find((e) => e.kind === 'reaction' && (e.a === id || e.b === id));
+  if (spent) { prev.over = { id, other: spent.a === id ? spent.b : spent.a }; S.last[ti] = prev; }
+  else if (acc.length) S.last[ti] = { id, events: acc, at: live ? performance.now() : 0 };
   else if (!prev || !prev.events.length) S.last[ti] = { id, events: [] };
-  record(ti, id, amt, how, res.events);
+  record(ti, id, amt, how, res.events, B);
   lensFeed(ti, entering(id, amt.mL ? BY_ID[id].conc * amt.mL : amt.piece ? pieceMmol(id) : 0), res.events);
   tubeTag(ti);
-  const still = spent && prev.id === id && performance.now() - (prev.at || 0) < 4000; // cùng một lần rót: giữ nhãn hiện tượng vừa thấy
-  const say = still ? seenShort(prev.events) : spent ? `${label(spent.a === id ? spent.b : spent.a)} đã hết` : seenShort(res.events);
-  if (say) flash(ti, cap(say), !live && !still);
+  const say = spent ? `${label(spent.a === id ? spent.b : spent.a)} đã hết` : seenShort(acc); // nhãn trên bàn: hiện tượng rõ nhất của cả lần, phần sau không đè phần trước
+  if (say) flash(ti, cap(say), !live);
   if (fresh || res.events.some((e) => e.kind === 'indicator')) sfx.ding();
   render(); return true;
 }
 // Đồ thị ở dải kết quả: sau mỗi lần thêm (hoặc đun) ghi một điểm = tổng thể tích trong ống + số mmol từng sản phẩm đã tạo. Trục ngang là thể tích, KHÔNG phải thời gian.
 function curvePoint(ti) { S.curve[ti].push({ v: S.tubes[ti].vol, p: Object.fromEntries(Object.entries(S.prod[ti]).map(([f, q]) => [f, q.mol * 1000])) }); if (S.curve[ti].length > 400) S.curve[ti].splice(1, 1); }
 function addMade(ti, e) { for (const m of e.made || []) { const q = S.prod[ti][m.f] || (S.prod[ti][m.f] = { mol: 0, mark: m.mark || '' }); q.mol += m.mol; } }
-function record(ti, id, amt, how, events) {
-  const top = S.log[0], same = top && top.ti === ti && top.id === id && top.how === how;
-  const e = same ? top : { ti, id, how, mL: 0, n: 0, verdict: null, seen: '' };
-  if (!same) S.log.unshift(e);
-  e.mL += amt.mL || 0; e.n += 1;
+
+// ---------- MỘT lần thêm chất = MỘT quan sát (21/11, mục 48 của LUONG_2) ----------
+// Trang rót 2 mL thành 8 phần 0,25 mL, nhỏ 5 giọt thành 5 lần, thả 3 mẩu thành 3 lần: mỗi phần gọi apply riêng.
+// Trước đây dải kết quả, nhãn trên bàn và sổ chỉ giữ sự kiện của phần CUỐI nên hiện tượng chính ở phần đầu
+// (thả Na rồi rót HCl: "sủi khí rất mạnh") bị phần trung hoà sau ("không thấy bằng mắt") đè mất.
+// BATCH gom mọi sự kiện của một lần bấm; sự kiện trùng phương trình thì cộng dồn lượng, không kể hai lần.
+let BATCH = null;
+const SEEN_FX = ['ppt', 'gas', 'color', 'coat', 'dissolve']; // hiệu ứng nhìn thấy được
+const visibleFx = (e) => e.kind === 'reaction' && (e.r.effects || []).some((f) => SEEN_FX.includes(f.type));
+function mergeEvents(acc, more) {
+  for (const e of more) {
+    const key = e.kind === 'reaction' ? `rx:${e.r.equation || `${e.a}+${e.b}`}` : `${e.kind}:${e.a}+${e.b}`;
+    const old = acc.find((x) => x.mKey === key);
+    if (!old) { acc.push({ ...e, mKey: key, extent: e.extent || 0, made: (e.made || []).map((m) => ({ ...m })) }); continue; }
+    old.extent += e.extent || 0;
+    for (const m of e.made || []) { const q = old.made.find((x) => x.f === m.f); if (q) q.mol += m.mol; else old.made.push({ ...m }); }
+    if (e.kind === 'indicator') Object.assign(old, e, { mKey: key }); // chỉ thị: giữ trạng thái mới nhất
+    if (e.out) old.out = e.out;
+  }
+  return acc;
+}
+// Sổ ống cũng cần biết ranh giới của một lần cho chất (beginPour / endPour của tubechem.js): Na trong ống gặp acid đang rót thì
+// phản ứng với acid trước, phần Na dư gặp nước khi đóng lần rót. Sự kiện endPour trả về được gộp vào CÙNG lần (cùng dòng sổ, cùng quan sát).
+function beginBatch(ti, id, how) { BATCH = { ti, id, how, events: [], prev: S.last[ti], logged: null }; beginPour(S.tubes[ti], id); }
+function endBatch() { const B = BATCH; if (B) { const res = endPour(S.tubes[B.ti]); if (res.events.length) absorb(B.ti, B.id, { close: true }, B.how, res); } BATCH = null; }
+// Cảnh báo an toàn do fork Logic gắn vào dữ liệu phản ứng. Đọc được ba dạng để không phụ thuộc cách họ đặt tên:
+// hiệu ứng { type: 'safety' | 'warn', text }, trường r.safety (chuỗi hoặc mảng), hoặc r.notes có phần tử { safety: true, text }.
+function safetyOf(events) {
+  const out = [];
+  for (const e of events || []) { const r = e && e.r; if (!r) continue;
+    for (const f of r.effects || []) if (f.type === 'safety' || f.type === 'warn') out.push(f.text);
+    const s = r.safety; if (typeof s === 'string') out.push(s); else if (Array.isArray(s)) out.push(...s.map((x) => (typeof x === 'string' ? x : x && x.text)));
+    for (const n of r.notes || []) if (n && typeof n === 'object' && (n.safety || n.type === 'safety' || n.type === 'warn')) out.push(n.text); }
+  return [...new Set(out.filter(Boolean))];
+}
+// Ghi chú thường của máy (chuỗi trong r.notes): không phải cảnh báo, hiện ở mục "Lưu ý" trong Chi tiết.
+function notesOf(events) {
+  const out = [];
+  for (const e of events || []) for (const n of (e && e.r && e.r.notes) || []) if (typeof n === 'string') out.push(n);
+  return [...new Set(out)];
+}
+// Sổ thí nghiệm: MỘT lần thêm chất = MỘT dòng, ghi đủ các phương trình đã xảy ra trong lần đó (mục 48).
+function record(ti, id, amt, how, events, B) {
+  const top = S.log[0];
+  const same = B ? B.logged && top === B.logged : top && top.ti === ti && top.id === id && top.how === how;
+  const e = same ? top : { ti, id, how, mL: 0, n: 0, verdict: null, seen: '', seens: [], eqs: [] };
+  if (!same) { S.log.unshift(e); if (B) B.logged = e; }
+  e.mL += amt.mL || 0; if (!amt.close) e.n += 1;
   const rx = events.filter((x) => x.kind === 'reaction'), ind = events.find((x) => x.kind === 'indicator'), indText = ind && indSay(ind);
-  if (rx.length) { e.verdict = 'reaction'; const seen = rx.map((x) => x.r.effects.filter((f) => f.type !== 'heat' && f.type !== 'quiet').map((f) => f.text).join('; ')).filter(Boolean); if (indText) seen.push(indText); e.seen = seen.join('; ') || 'Không thấy thay đổi bằng mắt'; e.eq = rx.map((x) => x.r.equation).join(' · '); }
-  else if (ind) { e.verdict = 'indicator'; e.seen = indText; }
-  else if (events[0] && !e.verdict) { e.verdict = events[0].kind; e.seen = events[0].kind === 'none' ? 'Không có hiện tượng' : 'App chưa có dữ liệu cho cặp này'; }
+  if (rx.length) { e.verdict = 'reaction';
+    for (const x of rx) { const t = x.r.effects.filter((f) => f.type !== 'heat' && f.type !== 'quiet').map((f) => f.text).join('; ');
+      if (t && !e.seens.includes(t)) e.seens.push(t);
+      if (x.r.equation && !e.eqs.includes(x.r.equation)) e.eqs.push(x.r.equation); }
+    if (indText && !e.seens.includes(indText)) e.seens.push(indText);
+    e.seen = e.seens.join('; ') || 'Không thấy thay đổi bằng mắt'; e.eq = e.eqs.join(' · '); }
+  else if (ind && e.verdict !== 'reaction') { e.verdict = 'indicator'; if (!e.seens.includes(indText)) e.seens.push(indText); e.seen = e.seens.join('; '); }
+  else if (events[0] && !e.verdict) { e.verdict = events[0].kind; e.observation = events[0].r.observation; e.seen = e.observation || (events[0].kind === 'none' ? 'Không có hiện tượng' : 'App chưa có dữ liệu cho cặp này'); }
 }
 
 // ---------- hàng chờ: không khoá nút; bấm nhanh liên tiếp thì các việc chạy lần lượt theo đúng thứ tự (tối đa 8 việc chờ) ----------
@@ -175,12 +230,13 @@ function addNow(id, ti, unit, v) {
   S.lastAdd = { id, unit, n }; bench.setAwait(false); lensPlan(ti, id, unit, n);
   const what = unit === 'piece' ? `${n} ${pieceUnit(id)}` : unit === 'giot' ? `${n} giọt ${label(id)}` : `${fm(n, 1)} mL ${label(id)}`;
   const gone = (done) => { if (!bench.has(id)) { toast(`Lọ ${label(id)} đã được cất, chọn lại trong tủ.`); done(); return true; } return false; };
-  const after = (done) => () => { if (S.chem) bench.setAwait(true); done(); };
-  if (unit === 'piece') act(`${what} vào ${tn(ti)}`, (done) => { if (gone(done)) return; let left = n; const one = () => bench.addSolid(id, ti, () => { apply(ti, id, { piece: true }, 'solid'); sfx.plop(); }, () => { if (--left > 0) one(); else after(done)(); }); one(); }, id);
-  else if (unit === 'giot') act(`${what} vào ${tn(ti)}`, (done) => { if (gone(done)) return; let left = n;
+  // after: đóng luôn phiên gom của lần thêm này (mục 48) để lần bấm sau bắt đầu một quan sát mới
+  const after = (done) => () => { endBatch(); if (S.chem) bench.setAwait(true); done(); };
+  if (unit === 'piece') act(`${what} vào ${tn(ti)}`, (done) => { if (gone(done)) return; beginBatch(ti, id, 'solid'); let left = n; const one = () => bench.addSolid(id, ti, () => { apply(ti, id, { piece: true }, 'solid'); sfx.plop(); }, () => { if (--left > 0) one(); else after(done)(); }); one(); }, id);
+  else if (unit === 'giot') act(`${what} vào ${tn(ti)}`, (done) => { if (gone(done)) return; beginBatch(ti, id, 'drop'); let left = n;
     const one = () => { if (left <= 0) { after(done)(); return; } left--; if (!bench.dropOne(() => { sfx.drop(); if (!apply(ti, id, { mL: DROP_ML, drop: true }, 'drop')) left = 0; one(); })) after(done)(); };
     const a = bench.armed(); if (a && a.id === id && a.ti === ti) one(); else bench.arm(id, ti, one); }, id);
-  else act(`${what} vào ${tn(ti)}`, (done) => { if (gone(done)) return; bench.pour(id, ti, { target: n, onChunk: (mL) => { const ok = apply(ti, id, { mL }, 'pour'); if (ok) sfx.trickle(); return ok; }, onDone: after(done) }); }, id);
+  else act(`${what} vào ${tn(ti)}`, (done) => { if (gone(done)) return; beginBatch(ti, id, 'pour'); bench.pour(id, ti, { target: n, onChunk: (mL) => { const ok = apply(ti, id, { mL }, 'pour'); if (ok) sfx.trickle(); return ok; }, onDone: after(done) }); }, id);
   return true;
 }
 // Thêm lần nữa: đúng chất và lượng vừa dùng vào ống đang chọn. one = true (phím cách): đang nhỏ giọt thì chỉ thêm 1 giọt.
@@ -255,7 +311,7 @@ function renderResult() { if (UI) return;
   if (rx.length) { const made = (e) => { const tot = S.sum[S.tube][e.r.equation] || e.extent; return e.r.eq ? 'Đã tạo ra ' + e.r.eq.rhs.filter((x) => x.f !== 'H2O').map((x) => `${fm(x.coef * tot * 1000, 2)} mmol ${pretty(x.f)}`).join(' · ') : ''; };
     put(host, el('div', { class: 'seen' }, `${Tn(S.tube)} · ${low(cap(seenShort(L.events)))}`), rx.filter((e) => e.r.equation).map((e) => el('div', { class: 'eq' }, e.r.equation, el('small', {}, made(e)))), el('div', { class: 'why' }, L.over ? `${label(L.over.other)} trong ống đã hết: thêm ${label(L.over.id)} nữa không tạo thêm sản phẩm. ` : '', rx[0].r.reason), el('div', { class: 'line2' }, (() => { const m = modelOf(S.tube); return m && m.usesIons ? el('div', { class: 'ion' }, 'Phương trình ion thu gọn: ', el('b', {}, m.ionic), m.spect.length ? `  ·  ion không tham gia: ${m.spect.map((x) => x.label).join(', ')}` : '') : null; })(), rx.filter((e) => e.r.eq && e.r.eq.lhs.length > 1).slice(0, 1).map((e) => el('div', { class: 'ratio' }, ratioText(e))))); }
   else if (ind) put(host, el('div', { class: 'seen' }, `${Tn(S.tube)} · ${low(indSay(ind))}`), el('div', { class: 'why' }, `pH trong ống khoảng ${fm(ind.pH, 1)}. Phenolphthalein hoá hồng khi pH từ khoảng 8,2 trở lên.`));
-  else put(host, el('div', { class: `seen ${first.kind}` }, `${Tn(S.tube)} · ${first.kind === 'none' ? 'không có hiện tượng' : 'app chưa có dữ liệu'}: ${label(first.a)} + ${label(first.b)}`), el('div', { class: 'why' }, first.r.reason));
+  else put(host, el('div', { class: `seen ${first.kind}` }, `${Tn(S.tube)} · ${low(first.r.observation || (first.kind === 'none' ? 'Không có hiện tượng' : 'App chưa có dữ liệu'))}: ${label(first.a)} + ${label(first.b)}`), el('div', { class: 'why' }, first.r.reason));
 }
 // Hệ số trong phương trình là tỉ lệ số mol, không phải số lần rót: nói rõ bằng số mmol đã thật sự phản ứng trong ống.
 function ratioText(e) { const tot = S.sum[S.tube][e.r.equation] || e.extent, L = e.r.eq.lhs; return `Hệ số là tỉ lệ số mol, không phải số lần rót: ${L.map((x) => `${x.coef} ${pretty(x.f)}`).join(' : ')}. Trong ống đã phản ứng ${L.map((x) => `${fm(x.coef * tot * 1000, 2)} mmol ${pretty(x.f)}`).join(' với ')}.`; }
@@ -329,12 +385,32 @@ function renderTime(i) { TL.info = i; if (!TL.range) return; const span = Math.m
 function renderLens() {
   if (!lens) { HUD.title = el('h2', {}); HUD.sub = el('p', { class: 'sub' }); HUD.list = el('div', { class: 'hud-list' }); HUD.evt = el('div', { class: 'hud-evt' }); HUD.again = el('button', { title: 'Tua về ngay trước lúc các hạt gặp nhau rồi phát lại', onclick: () => { const M = (TL.info && TL.info.marks) || [], rx = M.filter((m) => m.type === 'rx'); if (!rx.length) { toast('Chưa có phản ứng nào trong ống này để xem lại.'); return; } const lastAdd = M.filter((m) => m.type === 'add').pop(), first = rx.find((m) => !lastAdd || m.t >= lastAdd.t) || rx[rx.length - 1]; lens.play(first.t - 0.8); } }, 'Xem lại lúc các hạt gặp nhau');
     HUD.head = el('div', { class: 'hud-head' }, HUD.title); put($('lensHud'), HUD.head, HUD.sub, HUD.list, HUD.evt, HUD.again);
-    buildTimeline(); lens = mountLens($('lens'), { tintEl: $('lensTint'), onTime: renderTime, onStats: (rows, U, pending, scrub, rescaled) => { const W = { ion: 'trong dung dịch', mol: 'trong dung dịch', ppt: 'kết tủa, nằm ở đáy', solid: 'chất rắn chưa tan' }, ord = { solid: 0, ion: 1, mol: 1, ppt: 2 };
-      HUD.sub.textContent = scrub ? 'Đang xem lại: số hạt bên dưới là của thời điểm đang tua, không phải lúc này.' : `Phóng to minh hoạ: 1 hạt ≈ ${String(U).replace('.', ',')} mmol, không vẽ nước.${rescaled ? ' Vừa đổi thang vì lượng chất nhiều lên: số hạt giảm nhưng lượng chất không đổi.' : ''}${pending ? ` Đang quay chậm, còn ${pending} lượt gặp nhau.` : ''}`;
-      put(HUD.list, rows.length ? rows.sort((a, b) => ord[a.kind] - ord[b.kind]).map((r) => el('div', { class: `hud-it ${r.kind}${r.n ? '' : ' zero'}` }, el('i', { style: `background:${r.color}` }), el('b', {}, r.label + (r.kind === 'ppt' ? '↓' : '')), el('em', {}, `${r.n} hạt`), el('small', {}, el('span', { class: 'num' }, `${scrub ? '≈ ' : ''}${fm(r.mmol, 2)} mmol`), ` · ${r.kind === 'ppt' && r.note ? `chất rắn${r.form === 'keo' || r.form === 'bông' ? ' dạng ' + r.form : ''} màu ${r.note}, nằm ở đáy` : (W[r.kind] || '') + (r.label === 'H⁺' ? ' (trong nước là H₃O⁺)' : '')}`))) : el('p', { class: 'sub' }, 'Chưa có hạt nào.'));
-      for (const n of HUD.list.querySelectorAll('small')) n.title = n.textContent; // bảng dạng gọn cắt chú thích còn một dòng: rê chuột vẫn đọc được đủ
-      // design system: nhãn hạt chia nhóm Tạo thành / Còn lại (sau khi đã có phản ứng), để ion không đổi có chỗ riêng
-      if (UI && !scrub && rows.length) { const m = modelOf(S.tube), made = m ? new Set(m.rhs.map((x) => x.label)) : null; if (made) { const kids = [...HUD.list.children], g1 = [], g2 = []; rows.forEach((r, k) => (made.has(r.label) ? g1 : g2).push(kids[k])); put(HUD.list, g1.length ? el('p', { class: 'hud-group' }, 'Tạo thành') : null, g1, g2.length ? el('p', { class: 'hud-group' }, 'Còn lại') : null, g2); } } } });
+    buildTimeline(); lens = mountLens($('lens'), { tintEl: $('lensTint'), onTime: renderTime, onStats: (rows, U, pending, scrub, rescaled) => {
+      const description = { ion: 'trong dung dịch', mol: 'trong dung dịch', ppt: 'kết tủa, nằm ở đáy', solid: 'chất rắn chưa tan' };
+      const order = { solid: 0, ion: 1, mol: 1, ppt: 2 };
+      HUD.sub.textContent = scrub ? 'Số hạt minh hoạ tại thời điểm đang tua.' : `Ion, phân tử và kết tủa: 1 hạt minh hoạ ≈ ${String(U).replace('.', ',')} mmol.${rescaled ? ' Vừa đổi thang hiển thị.' : ''}${pending ? ` Đang quay chậm, còn ${pending} lượt gặp nhau.` : ''}`;
+      const made = new Set();
+      if (UI && !scrub) {
+        for (const event of S.last[S.tube]?.events || []) {
+          for (const product of modelFor(event, S.tube)?.rhs || []) made.add(product.label);
+        }
+      }
+      const formed = [], present = [];
+      for (const r of rows.sort((a, b) => order[a.kind] - order[b.kind])) {
+        const solid = r.kind === 'solid';
+        const count = solid ? (r.n ? 'Cụm minh hoạ' : 'Chưa hiện cụm') : r.n ? `${r.n} hạt` : 'Chưa hiện hạt';
+        const amount = scrub && solid ? null : el('span', { class: 'num' }, `${scrub ? '≈ ' : ''}${fm(r.mmol, 2)} mmol · `);
+        const where = r.kind === 'ppt' && r.note ? `chất rắn${r.form === 'keo' || r.form === 'bông' ? ' dạng ' + r.form : ''} màu ${r.note}, nằm ở đáy` : (description[r.kind] || '') + (r.label === 'H⁺' ? ' (trong nước là H₃O⁺)' : '');
+        const detail = el('small', {}, amount, where);
+        detail.title = detail.textContent;
+        const item = el('div', { class: `hud-it ${r.kind}${r.n ? '' : ' zero'}` }, el('i', { style: `background:${r.color}` }), el('b', {}, r.label + (r.kind === 'ppt' ? '↓' : '')), el('em', {}, count), detail);
+        (made.has(r.label) ? formed : present).push(item);
+      }
+      put(HUD.list, rows.length ? [
+        formed.length ? el('p', { class: 'hud-group' }, 'Tạo thành') : null, formed,
+        made.size && present.length ? el('p', { class: 'hud-group' }, 'Còn lại') : null, present
+      ].flat() : el('p', { class: 'sub' }, 'Chưa có hạt nào.'));
+    } });
     LZ.box = el('div', { class: 'lens-zoom' }, el('button', { 'aria-label': 'Thu nhỏ vòng hạt', title: 'Thu nhỏ: thấy nhiều hạt hơn', onclick: () => lens.zoom(1 / 1.3) }, '−'), (LZ.lab = el('button', { title: 'Về cỡ thường', onclick: () => lens.zoom(0) }, '100%')), el('button', { 'aria-label': 'Phóng to vòng hạt', title: 'Phóng to: máy quay bám theo chỗ các hạt đang gặp nhau', onclick: () => lens.zoom(1.3) }, '+')); LZ.box.title = 'Zoom vòng hạt'; HUD.head.appendChild(LZ.box); LZ.box.classList.add('in-hud');
     window.__lens = lens; if ($('lensCap')) { new ResizeObserver(layoutLens).observe($('stagewrap')); layoutLens(); }
   }
@@ -345,8 +421,14 @@ function renderLens() {
 }
 // Khung "Bên trong ống" (3D, nằm cạnh bàn): thế giới hạt của ống đang chọn. Ba nhịp: trước khi trộn, các hạt gặp nhau, sau phản ứng.
 let p3 = null; const P3 = {};
-const lastRx = (ti) => { const L = S.last[ti]; return (L && L.events.find((x) => x.kind === 'reaction' && x.r.eq)) || null; };
-const modelOf = (ti) => { const e = lastRx(ti); if (!e) return null; try { return buildModel(e, S.tubes[ti]); } catch (err) { return null; } };
+// Một lần thêm có thể có nhiều phản ứng (mục 48): lấy phản ứng NHÌN THẤY ĐƯỢC đầu tiên làm phản ứng chính
+// (phương trình ion thu gọn, bảng đếm hạt, tỉ lệ mol đi theo nó), không có thì lấy phản ứng đầu tiên.
+const lastRx = (ti) => { const L = S.last[ti]; if (!L) return null; const rx = L.events.filter((x) => x.kind === 'reaction' && x.r.eq); return rx.find(visibleFx) || rx[0] || null; };
+function modelFor(event, ti) {
+  if (event?.kind !== 'reaction' || !event.r.eq) return null;
+  try { return buildModel(event, S.tubes[ti]); } catch { return null; }
+}
+const modelOf = (ti) => modelFor(lastRx(ti), ti);
 function renderProc() { if (LENS) { renderLens(); return; } const host = $('proc'); if (!host) return;
   if (!p3) {
     P3.title = el('h2', {}); P3.steps = ['Trước khi trộn', 'Gặp nhau', 'Sau phản ứng'].map((t, k) => el('button', { onclick: () => p3.goto(k + 1) }, `${'①②③'[k]} ${t}`));
@@ -381,7 +463,7 @@ function renderBook() {
   if (L && L.events.length) for (const e of L.events) {
     if (e.kind === 'reaction') fx.push(el('div', {}, el('span', { class: 'fr-tag k-reaction' }, 'Có phản ứng'), el('b', {}, e.title || `${label(e.a)} + ${label(e.b)}`)), el('ul', { class: 'fr-fx' }, e.r.effects.map((f) => el('li', {}, el('i', { style: `background:${SW(f)};${f.type === 'gas' ? 'border-radius:50%' : ''}` }), f.text))), el('p', { class: 'fr-why' }, 'Vì sao: ', e.r.reason), e.out ? el('p', { class: 'fr-note' }, `${label(e.out)} đã phản ứng hết.`) : null, e.slow ? el('p', { class: 'fr-note' }, 'Phản ứng với chất rắn diễn ra từ từ.') : null, e.r.notes.map((n) => el('p', { class: 'fr-note' }, n)));
     else if (e.kind === 'indicator') fx.push(el('div', {}, el('span', { class: 'fr-tag k-indicator' }, 'Chất chỉ thị'), el('b', {}, indSay(e))));
-    else fx.push(el('div', {}, el('span', { class: `fr-tag k-${e.kind}` }, e.kind === 'none' ? 'Không phản ứng' : 'Chưa có dữ liệu'), el('b', {}, `${label(e.a)} + ${label(e.b)}`)), el('p', { class: 'fr-why' }, e.r.reason), e.r.notes.map((n) => el('p', { class: 'fr-note' }, n)));
+    else fx.push(el('div', {}, el('span', { class: `fr-tag k-${e.kind}` }, e.r.observation || (e.kind === 'none' ? 'Không phản ứng' : 'Chưa có dữ liệu')), el('b', {}, `${label(e.a)} + ${label(e.b)}`)), el('p', { class: 'fr-why' }, e.r.reason), e.r.notes.map((n) => el('p', { class: 'fr-note' }, n)));
   }
   if (N) fx.push(el('div', { class: fx.length ? 'fr-test' : '' }, el('span', { class: 'fr-tag k-test' }, N.tag), el('b', {}, N.seen), el('p', { class: 'fr-note' }, N.why)));
   put(host, el('h2', {}, 'Sổ thí nghiệm', el('button', { 'aria-label': 'Đóng sổ', onclick: () => { S.book = false; renderBook(); } }, '×')),
@@ -393,7 +475,7 @@ function renderBook() {
         if (e.how === 'test') return el('div', {}, el('b', {}, `${n}. `), `${e.tag}, ${tn(e.ti)}`, el('small', {}, el('span', { class: 'fr-tag k-test' }, 'Phép thử'), e.seen));
         if (e.how === 'heat') return el('div', {}, el('b', {}, `${n}. `), `Đun nóng ${tn(e.ti)}`, el('small', {}, el('span', { class: 'fr-tag k-reaction' }, 'Có phản ứng'), e.seen), el('small', {}, e.eq));
         const what = e.how === 'drop' ? `Nhỏ ${e.n} giọt ${chemName(e.id)}` : e.how === 'solid' ? `Thả ${e.n} ${pieceUnit(e.id)}` : `Rót ${fm(e.mL, 2)} mL ${chemName(e.id)}`;
-        return el('div', {}, el('b', {}, `${n}. `), `${what} vào ${tn(e.ti)}`, e.verdict ? el('small', {}, el('span', { class: `fr-tag k-${e.verdict}` }, { reaction: 'Có phản ứng', none: 'Không phản ứng', na: 'Chưa có dữ liệu', indicator: 'Chỉ thị' }[e.verdict]), e.seen) : null, e.eq ? el('small', {}, e.eq) : null); }))));
+        return el('div', {}, el('b', {}, `${n}. `), `${what} vào ${tn(e.ti)}`, e.verdict ? el('small', {}, el('span', { class: `fr-tag k-${e.verdict}` }, { reaction: 'Có phản ứng', none: e.observation ? 'Quan sát' : 'Không phản ứng', na: 'Chưa có dữ liệu', indicator: 'Chỉ thị' }[e.verdict]), e.seen) : null, e.eq ? el('small', {}, e.eq) : null); }))));
 }
 // Khay Dụng cụ: mỗi dụng cụ là một thao tác lên ống đang chọn.
 const ICON = { again: 'M5 12a7 7 0 0 1 12-5l2-2v6h-6l2.2-2.2A4.5 4.5 0 0 0 8 12M19 12a7 7 0 0 1-12 5', water: 'M12 3c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11z', shake: 'M10 4h4M10.5 4v12a1.5 1.5 0 0 0 3 0V4M5 9l-2 2 2 2M19 9l2 2-2 2', heat: 'M12 3c3 4 5 6 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-5 1 2 2 2 3-5zM8 21h8', litmus: 'M9 3h6v18H9zM9 13h6', splint: 'M4 20L15 9M16 8c-1.5-1.5-.5-3 .8-5 .8 1.8 3 2.8 1.6 4.8a1.6 1.6 0 0 1-2.4.2z', thermo: 'M12 4v10M10.5 4h3v10.3a3.4 3.4 0 1 1-3 0z', discard: 'M8 4l9 4-6 11a3 3 0 0 1-5-2zM9 13l6 2M18 17v3', view: 'M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.5 15.5L20 20M8 10.5h5M10.5 8v5' };
@@ -443,7 +525,7 @@ if (bench.flat) { const fitUI = () => { const k = Math.max(1, innerWidth / (DS ?
 bench.setSide(0); bench.setInset(false); bench.view('all', true);
 TUBES.forEach(tubeTag); bench.setActive(0);
 if (DS) { const { mountDS } = await import('./ui_ds.js'); // một tệp giao diện cho cả bố cục gốc và v2 (ui_ds.js tự đọc data-layout)
-  UI = mountDS({ S, bench, TUBES, Tn, tn, capOf, isOn, onBench, isCup, el, put, $, fm, num, cap, low, BY_ID, CAB, OLD, MAX_ML, label, isSolid, shortName, concText, chemName, listLabel, pieceUnit, unitOf, pretty, seenShort, indSay, modelOf, ratioText, norm, toast,
+  UI = mountDS({ S, bench, TUBES, Tn, tn, capOf, isOn, onBench, isCup, el, put, $, fm, num, cap, low, BY_ID, CAB, OLD, MAX_ML, label, isSolid, shortName, concText, chemName, listLabel, pieceUnit, unitOf, pretty, seenShort, indSay, modelOf, ratioText, norm, toast, visibleFx, safetyOf, notesOf,
     A: { placeCup, stowCup, stir, selectChem, selectTube, addNow, repeat, shake, discard, clearAll, doLitmus, doSplint, doHeat, doThermo, setView, putAwayOne, render, renderBook, toggleSound() { S.sound = !S.sound; store.set('lab_free_sound', S.sound ? '1' : '0'); if (S.sound) sfx.ding(); } } });
   render(); }
 else { cabs.push(buildCab($('cabDock'), true)); if (wide.matches) S.drawer = 'tools'; if (bench.flat && wide.matches) { const foot = $('bSound').parentElement; foot.insertBefore($('drawer'), foot.querySelector('.sp')); $('app').classList.add('toolsin'); } layout(); }

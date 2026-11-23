@@ -4,8 +4,9 @@ Phòng thực hành Hoá học ảo chạy trên trình duyệt (bản thử). C
 
 ## Xem trên web
 
-- Bàn thực hành: https://thangbeo3003.github.io/lab-khoa-hoc/thuc_hanh.html
-- Bài mẫu Tốc độ phản ứng (bản cũ): https://thangbeo3003.github.io/lab-khoa-hoc/
+- [Bàn thực hành desktop](https://thangbeo3003.github.io/lab-khoa-hoc/thuc_hanh.html)
+- [Bố cục bàn thực hành trước](https://thangbeo3003.github.io/lab-khoa-hoc/thuc_hanh.html?layout=classic)
+- [Bài mẫu Tốc độ phản ứng · bản 3](https://thangbeo3003.github.io/lab-khoa-hoc/index.html?v=3)
 
 ## Chạy trên máy
 
@@ -15,7 +16,7 @@ Không cần cài gì ngoài Python 3:
 python3 serve.py 5183
 ```
 
-Rồi mở http://localhost:5183/thuc_hanh.html
+Rồi mở http://localhost:5183/thuc_hanh.html. Từ 1024 px, trang mở bố cục v2.
 
 ## Kiểm thử phần hoá học
 

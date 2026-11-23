@@ -8,7 +8,7 @@
 // Sự kiện phản ứng: made liệt kê chất sinh ra; một dòng made có mol ÂM nghĩa là chất do phản ứng trước sinh ra nay bị tiêu hao bấy nhiêu
 // (kết tủa tan, sản phẩm tan phản ứng tiếp). Cộng dồn made theo công thức luôn ra đúng lượng sản phẩm đang còn, không bao giờ âm.
 import { predict, predictPpt, soluteId, pptId, BY_ID } from '../chem/engine.js';
-import { INDICATOR, CAOH2_SAT_G_L } from '../chem/data.js';
+import { INDICATOR, CAOH2_SAT_G_L, ALKALI_SAFETY } from '../chem/data.js';
 import { molarMass, pretty, equation } from '../chem/formula.js';
 
 export const DROP_ML = 0.05, MAX_ML = 12, CLEAR = '#dcecf5'; // MAX_ML: sức chứa mặc định (ống nghiệm). Mỗi bình mang sức chứa riêng t.cap (cốc 100 mL: 100)
@@ -30,17 +30,41 @@ function take(it, mol) { const left = Math.max(0, it.mol - mol), lost = Math.max
 export function add(t, id, amt) {
   const c = BY_ID[id];
   if (amt.mL && t.vol + amt.mL > (t.cap ?? MAX_ML) + 1e-9) return { full: true, events: [] };
-  const it = item(t, id), events = [];
+  const events = t.pour && t.pour.id !== id ? endPour(t).events : []; // phần hình quên đóng lần rót trước: đóng hộ trước khi thêm chất khác
+  const it = item(t, id), firstWater = id === 'H2O' && t.vol <= EPS;
   if (amt.mL) { t.vol += amt.mL; it.mL += amt.mL; if (amt.drop) it.drops += 1; }
   if (c.group === 'indicator') t.indicator = id;
   else if (isSolid(id)) { const m = (PIECE[id] || PIECE_DEF).g / molarMass(c.f); it.mol += m; it.mol0 += m; it.pieces += 1; }
   else if (id !== 'H2O') { const m = (c.conc * amt.mL) / 1000; it.mol += m; it.mol0 += m; }
   if (isReagent(id)) events.push(...react(t, id, 0));
-  else if (id === 'H2O') events.push(...wet(t));
+  else if (id === 'H2O') events.push(...wet(t, firstWater));
   events.push(...settle(t)); limeEq(t);
   if (['acid', 'base'].includes(c.group) && !events.some((e) => e.kind === 'reaction')) { const q = pptQuiet(t, id, events.length > 0); if (q) events.push(q); }
+  indicatorEvent(t, events);
+  return { events };
+}
+function indicatorEvent(t, events) {
   const ind = indicatorLook(t);
   if (ind && ind.color !== t.indShown) { events.push({ kind: 'indicator', id: t.indicator, from: t.indShown, to: ind.color, changed: ind.changed, pH: ind.pH, first: t.indShown === null }); t.indShown = ind.color; }
+}
+
+// ---------- một lần rót (21/11, lỗi Na + HCl, mục 48 LUONG_2_TRAI_NGHIEM.md) ----------
+// Phần hình rót một lượng thành nhiều phần nhỏ chỉ để vẽ mực dâng. Về hoá học, MỘT lần bấm rót là MỘT lần cho chất vào.
+// Kim loại kiềm (Na) trong dung dịch acid: phản ứng với acid trước, kim loại còn dư mới phản ứng với nước. Đây là quy ước phổ thông về thứ tự;
+// CHƯA có nguồn đọc trực tiếp (L2_LOGIC_CONG_THUC.md). Lượng cuối không phụ thuộc quy ước này: acid và NaOH không cùng tồn tại.
+// Nếu tính từng phần nhỏ thì ngay phần đầu acid đã hết, Na dư phản ứng hết với nước, acid rót sau chỉ còn trung hoà NaOH: lượng cuối vẫn đúng
+// nhưng diễn biến sai. Vì vậy trong lúc đang rót một acid, phản ứng của kim loại kiềm với nước được giữ lại tới khi đóng lần rót.
+//   beginPour(t, id)  trước phần đầu tiên;   add(t, id, { mL }) cho từng phần;   endPour(t) sau phần cuối (kể cả khi dừng giữa chừng vì đầy).
+// endPour trả { events } như add. Không gọi beginPour thì sổ chạy như trước (mỗi lần add là một lần cho chất vào).
+// Lượng cuối sau cả lần rót không phụ thuộc cách chia phần (có phép kiểm).
+// Sự kiện phản ứng của kim loại kiềm với acid hoặc nước mang câu cảnh báo ở r.safety (chuỗi, lấy từ ALKALI_SAFETY của data.js).
+export function beginPour(t, id) { if (t.pour && t.pour.id !== id) endPour(t); t.pour = { id, acid: BY_ID[id]?.group === 'acid', held: !!(t.pour && t.pour.held) }; return t.pour; } // mở lại cùng một chất khi chưa đóng: vẫn là lần rót đó, giữ phần đang chờ
+export function endPour(t) {
+  const p = t.pour, events = []; t.pour = null; if (!p || !p.held) return { events };
+  const fresh = [];
+  for (const y of [...t.order]) if (BY_ID[y].alkali && t.items[y].mol > EPS) { const res = pair(t, y, 'H2O', fresh); if (res.event) events.push(res.event); }
+  for (const pid of new Set(fresh)) if (t.items[pid].mol > EPS) events.push(...react(t, pid, 1).filter((e) => e.kind === 'reaction'));
+  events.push(...settle(t)); limeEq(t); indicatorEvent(t, events);
   return { events };
 }
 
@@ -65,11 +89,20 @@ function land(t, r, ext, skip, fresh, solid) {
 
 // Hai chất trong sổ gặp nhau: tính lượng phản ứng, cập nhật sổ. Trả về { event } nếu có phản ứng, { quiet } nếu máy trả "không phản ứng" hoặc "chưa có dữ liệu".
 function pair(t, id, y, fresh) {
-  const A = t.items[id], B = t.items[y], water = y === 'H2O', V = Math.max(t.vol, 1e-6) / 1000;
+  const metal = BY_ID[id].alkali ? id : BY_ID[y].alkali ? y : null, other = metal === id ? y : id;
+  if (metal && other !== 'H2O' && BY_ID[other].group !== 'acid' && t.vol > 0) { // Na gặp dung dịch muối, base…: thực chất là Na + nước của dung dịch
+    const w = predict(metal, other); if (w.kind === 'reaction' && w.eq && w.eq.lhs.some((x) => x.f === 'H2O')) return pair(t, metal, 'H2O', fresh); }
+  if (metal && other === 'H2O') {
+    // Ống còn một acid mà máy chưa có dữ liệu với kim loại này (HNO₃): không tự cho kim loại phản ứng với nước rồi trung hoà, vì như vậy là đoán sản phẩm.
+    if (t.order.some((z) => BY_ID[z].group === 'acid' && t.items[z].mol > EPS && predict(metal, z).kind !== 'reaction')) return {};
+    if (t.pour && t.pour.acid) { t.pour.held = true; return {}; } // đang rót acid: kim loại kiềm dành cho acid, phần dư gặp nước khi đóng lần rót
+  }
+  const A = t.items[id], B = t.items[y] || { mol: 0 }, water = y === 'H2O', V = Math.max(t.vol, 1e-6) / 1000;
   const eqVol = (cid, x) => (BY_ID[cid].conc ? x.mol / BY_ID[cid].conc : 1);
   const opts = BY_ID[id].derived || BY_ID[y].derived ? { conc: { [id]: A.mol / V, [y]: B.mol / V } } : { volA: eqVol(id, A), volB: eqVol(y, B) }; // chất phát sinh không có nồng độ trên nhãn: đưa nồng độ thật trong ống
   const r = predict(id, y, opts);
   if (r.kind !== 'reaction' || !r.eq) return { quiet: { kind: r.kind, r, a: id, b: y } };
+  if (metal) r.safety = ALKALI_SAFETY[other === 'H2O' ? 'water' : 'acid']; // kết quả predict là đối tượng mới mỗi lần gọi nên gắn thêm ở đây không ảnh hưởng máy
   const co = (cid) => r.eq.lhs.find((x) => x.f === BY_ID[cid].f)?.coef;
   const ca = co(id), cb = water ? 0 : co(y), ext = Math.min(ca ? A.mol / ca : Infinity, cb ? B.mol / cb : Infinity); // nước cất là dung môi, coi như luôn dư
   if (!isFinite(ext) || ext <= EPS) return {};
@@ -90,7 +123,9 @@ function limeCap(t, e) {
 }
 
 // Thứ tự khi một chất gặp nhiều chất trong ống: trung hoà acid, base → các chất tan khác (phản ứng ion trong dung dịch) → kết tủa mịn đang có
-// → chất rắn dạng mẩu (kim loại, đá vôi: phản ứng trên bề mặt, chậm hơn) → nước cất.// Vôi tôi còn ở đáy thì dung dịch phía trên là nước vôi bão hoà: sau mỗi lần thêm chất (acid lấy bớt OH⁻, rót thêm nước), vôi tôi tan bù cho đủ mức bão hoà.
+// → chất rắn dạng mẩu (kim loại, đá vôi: phản ứng trên bề mặt, chậm hơn) → nước cất (kim loại kiềm: nước của dung dịch).
+
+// Vôi tôi còn ở đáy thì dung dịch phía trên là nước vôi bão hoà: sau mỗi lần thêm chất (acid lấy bớt OH⁻, rót thêm nước), vôi tôi tan bù cho đủ mức bão hoà.
 // Ước lượng: không tính ảnh hưởng của ion Ca²⁺ có sẵn; khi ống còn NaOH thì không bù.
 function limeEq(t) {
   const p = t.ppt.find((q) => q.f === 'Ca(OH)2' && q.lime && q.mol > EPS); if (!p || (t.items.NaOH && t.items.NaOH.mol > EPS)) return;
@@ -107,15 +142,20 @@ function react(t, id, depth) {
   for (const y of others) if (!isSolid(y)) go(y);
   if (!isSolid(id) && t.items[id].mol > EPS) out.push(...pptPhase(t, fresh, id));
   for (const y of others) if (isSolid(y)) go(y);
-  if (isSolid(id) && t.items.H2O && t.items.H2O.mL > 0) go('H2O');
+  if (isSolid(id) && ((t.items.H2O && t.items.H2O.mL > 0) || (BY_ID[id].alkali && t.vol > 0))) go('H2O'); // kim loại kiềm: dung dịch nào cũng có nước
   if (depth < 2) for (const pid of new Set(fresh)) if (t.items[pid].mol > EPS) out.push(...react(t, pid, depth + 1).filter((e) => e.kind === 'reaction')); // sản phẩm tan gặp chất còn dư trong ống
   if (!out.length && quiet) out.push(quiet);
   return out;
 }
-// Rót nước cất vào ống đang có chất rắn (Na, CaO): chỉ ghi khi có phản ứng, không báo "không phản ứng" mỗi lần pha loãng.
-function wet(t) {
+// Nước cất có thể phản ứng với chất rắn. Lần tiếp xúc đầu cũng ghi hiện tượng định tính đã khai báo.
+function wet(t, firstWater) {
   const out = [], fresh = [];
-  for (const y of [...t.order]) { if (!isSolid(y) || t.items[y].mol <= EPS) continue; const res = pair(t, y, 'H2O', fresh); if (res.event) out.push(res.event); }
+  for (const y of [...t.order]) {
+    if (!isSolid(y) || t.items[y].mol <= EPS) continue;
+    const res = pair(t, y, 'H2O', fresh);
+    if (res.event) out.push(res.event);
+    else if (firstWater && res.quiet?.r.observation) out.push(res.quiet);
+  }
   for (const pid of new Set(fresh)) if (t.items[pid].mol > EPS) out.push(...react(t, pid, 1).filter((e) => e.kind === 'reaction'));
   return out;
 }
@@ -201,7 +241,7 @@ export function heat(t) {
   const out = [];
   const cu = t.ppt.find((p) => p.f === 'Cu(OH)2' && p.mol > EPS);
   if (cu) { const mol = cu.mol, eq = equation(['Cu(OH)2'], ['CuO', 'H2O']); t.ppt = t.ppt.filter((p) => p !== cu); const old = t.ppt.find((p) => p.f === 'CuO'); if (old) old.mol += mol; else t.ppt.push({ f: 'CuO', mol, color: 'đen', form: 'mịn' });
-    out.push({ kind: 'reaction', heat: true, title: 'Đun nóng Cu(OH)₂', extent: mol, made: [{ f: 'CuO', mol, mark: '↓' }], r: { eq, equation: eq.text + '  (đun nóng)', effects: [{ type: 'ppt', f: 'CuO', color: 'đen', form: 'mịn', text: 'Kết tủa xanh lam chuyển dần thành chất rắn màu đen (CuO)' }], reason: 'Copper(II) hydroxide không bền với nhiệt: khi đun nóng bị phân huỷ thành copper(II) oxide màu đen và nước.', notes: [] } }); }
+    out.push({ kind: 'reaction', heat: true, title: 'Đun nóng Cu(OH)₂', extent: mol, made: [{ f: 'Cu(OH)2', mol: -mol, mark: '↓' }, { f: 'CuO', mol, mark: '↓' }], r: { eq, equation: eq.text + '  (đun nóng)', effects: [{ type: 'ppt', f: 'CuO', color: 'đen', form: 'mịn', text: 'Kết tủa xanh lam chuyển dần thành chất rắn màu đen (CuO)' }], reason: 'Copper(II) hydroxide không bền với nhiệt: khi đun nóng bị phân huỷ thành copper(II) oxide màu đen và nước.', notes: [] } }); }
   for (const [sid, carb] of [['CaCl2', 'CaCO3'], ['BaCl2', 'BaCO3']]) { const a = t.items.NaHCO3, b = t.items[sid]; if (!a || !b || a.mol <= EPS || b.mol <= EPS) continue;
     const ext = Math.min(a.mol / 2, b.mol), eq = equation(['NaHCO3', BY_ID[sid].f], [carb, 'NaCl', 'CO2', 'H2O'], { [carb]: '↓', CO2: '↑' }); a.mol -= 2 * ext; b.mol -= ext;
     const nacl = item(t, 'NaCl'); nacl.mol += 2 * ext; t.ppt.push({ f: carb, mol: ext, color: 'trắng', form: 'mịn' }); t.gasTotal += ext; t.lastGas = 'CO2';

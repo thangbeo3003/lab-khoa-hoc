@@ -62,7 +62,7 @@ function rx(a, b, lhs, rhs, marks, effects, reason, extra = {}) {
   if (lhs && !eq) return { ...base(a, b), kind: 'na', reason: 'Chưa dựng được phương trình cân bằng cho cặp này.', bug: true };
   return { ...base(a, b), kind: 'reaction', eq, equation: eq ? eq.text : null, effects, phenomenon: effects.map((e) => e.text).join('. ') + '.', reason, notes: [], ...extra };
 }
-const none = (a, b, reason) => ({ ...base(a, b), kind: 'none', equation: null, effects: [], phenomenon: 'Không có hiện tượng gì.', reason, notes: [] });
+const none = (a, b, reason, observation) => ({ ...base(a, b), kind: 'none', equation: null, effects: [], phenomenon: observation || 'Không có hiện tượng gì.', reason, notes: [], observation });
 const na = (a, b, reason = 'App chưa có dữ liệu cho cặp này.') => ({ ...base(a, b), kind: 'na', equation: null, effects: [], phenomenon: 'Chưa có dữ liệu.', reason, notes: [] });
 const note = (r, ...t) => { r.notes.push(...t); return r; };
 
@@ -90,7 +90,7 @@ ex('Ag', 'HNO3', (a, b) => note(rx(a, b, ['Ag', 'HNO3'], ['AgNO3', 'NO', 'H2O'],
 ex('Fe', 'HNO3', (a, b) => note(rx(a, b, ['Fe', 'HNO3'], ['Fe(NO3)3', 'NO', 'H2O'], P['↑']('NO'), [E.gas('NO', 'nitrogen monoxide'), E.dissolve('Sắt'), E.color('không màu', 'vàng nhạt', '#e3c877')], 'Nitric acid oxi hoá sắt lên Fe³⁺ và không sinh khí hydrogen.'), 'Khí NO không màu, gặp không khí hoá nâu đỏ (NO₂).'));
 for (const m of ['Na', 'Mg', 'Al', 'Zn']) ex(m, 'HNO3', (a, b) => na(a, b, 'Kim loại mạnh tác dụng với nitric acid loãng cho sản phẩm khử khác nhau tuỳ nồng độ (NO, N₂O, NH₄NO₃). App chưa mô phỏng trường hợp này.'));
 ex('Al', 'NaOH', (a, b) => rx(a, b, ['Al', 'NaOH', 'H2O'], ['Na[Al(OH)4]', 'H2'], P['↑']('H2'), [E.gas('H2', 'hydrogen'), E.dissolve('Nhôm')], 'Nhôm tan được trong dung dịch kiềm vì lớp oxide và hydroxide của nhôm có tính lưỡng tính.'));
-ex('Zn', 'NaOH', (a, b) => rx(a, b, ['Zn', 'NaOH', 'H2O'], ['Na2[Zn(OH)4]', 'H2'], P['↑']('H2'), [E.gas('H2', 'hydrogen', { rate: 'chậm' }), E.dissolve('Kẽm')], 'Kẽm tan được trong dung dịch kiềm vì hydroxide của kẽm có tính lưỡng tính.'));
+ex('Zn', 'NaOH', (a, b) => rx(a, b, ['Zn', 'NaOH', 'H2O'], ['Na2[Zn(OH)4]', 'H2'], P['↑']('H2'), [E.gas('H2', 'hydrogen', { rate: 'chậm' }), E.dissolve(BY_ID.Zn.name)], 'Kẽm tan được trong dung dịch kiềm vì hydroxide của kẽm có tính lưỡng tính.'));
 ex('Cu', 'FeCl3', (a, b) => rx(a, b, ['Cu', 'FeCl3'], ['CuCl2', 'FeCl2'], {}, [E.dissolve('Đồng'), E.color('vàng nâu', 'xanh lục nhạt', '#9fd0b4')], 'Fe³⁺ oxi hoá được đồng thành Cu²⁺, bản thân bị khử về Fe²⁺.', { ionic: 'Cu + 2Fe³⁺ → Cu²⁺ + 2Fe²⁺' }));
 ex('Fe', 'FeCl3', (a, b) => rx(a, b, ['Fe', 'FeCl3'], ['FeCl2'], {}, [E.dissolve('Sắt'), E.color('vàng nâu', 'lục nhạt', '#cfe6cf')], 'Sắt khử Fe³⁺ về Fe²⁺.', { ionic: 'Fe + 2Fe³⁺ → 3Fe²⁺' }));
 for (const m of ['Zn', 'Mg', 'Al']) ex(m, 'FeCl3', (a, b) => note(rx(a, b, [m, 'FeCl3'], [compound(METAL_CATION[m], 'Cl'), 'FeCl2'], {}, [E.dissolve(BY_ID[m].name), E.color('vàng nâu', 'lục nhạt', '#cfe6cf')], 'Kim loại mạnh hơn khử Fe³⁺ về Fe²⁺ trước.'), 'Nếu kim loại còn dư, Fe²⁺ tiếp tục bị khử thành sắt bám lên bề mặt.'));
@@ -105,7 +105,8 @@ ex('H2O2', 'KI', (a, b, o) => fixed(a, b, ['H2O2', 'KI', 'H2SO4'], ['I2', 'K2SO4
 ex('FeSO4', 'H2O2', (a, b, o) => fixed(a, b, ['FeSO4', 'H2O2', 'H2SO4'], ['Fe2(SO4)3', 'H2O'], {}, [E.color('lục nhạt', 'vàng nâu', '#d9a03b')], 'Trong môi trường acid, hydrogen peroxide oxi hoá Fe²⁺ thành Fe³⁺.', o));
 ex('CaCO3', 'H2SO4', (a, b) => note(rx(a, b, ['CaCO3', 'H2SO4'], ['CaSO4', 'CO2', 'H2O'], P['↑']('CO2'), [E.gas('CO2', 'carbon dioxide', { rate: 'chậm dần rồi dừng' })], 'Acid mạnh đẩy CO₂ ra khỏi muối carbonate.'), 'CaSO₄ ít tan bám quanh viên đá vôi, ngăn acid tiếp xúc, nên phản ứng chậm dần rồi dừng.'));
 ex('HCl', 'MnO2', (a, b) => none(a, b, 'Với HCl loãng ở nhiệt độ thường thì không phản ứng. Cần HCl đặc và đun nóng mới sinh khí chlorine.'));
-ex('H2O', 'Mg', (a, b) => none(a, b, 'Magnesium phản ứng với nước rất chậm ở nhiệt độ thường, gần như không thấy gì.'));
+// Santamaria và cộng sự, Electrochimica Acta (2007), doi:10.1016/j.electacta.2007.03.019 · lớp hydroxide trên Mg trong nước tinh khiết.
+ex('H2O', 'Mg', (a, b) => none(a, b, 'Magnesium phản ứng rất chậm với nước lạnh. Lớp magnesium hydroxide hình thành trên bề mặt làm phản ứng chậm thêm. Bàn thực hành chỉ mô tả hiện tượng gần như chưa thấy ngay sau khi trộn.', 'Phản ứng rất chậm'));
 for (const x of ['AgNO3', 'ZnSO4']) ex('NH3', x, (a, b) => na(a, b, 'Với dung dịch ammonia, kết tủa tạo ra rồi tan lại do tạo phức. App chưa mô phỏng trường hợp này.'));
 ex('CH3COOH', 'CuO', (a, b) => na(a, b, 'Phản ứng xảy ra chậm, cần đun nóng. App chưa mô phỏng trường hợp này.'));
 

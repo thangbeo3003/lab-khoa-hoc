@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bàn thực hành · Lab Khoa Học</title>
+<script>
+  const entry = new URL(location.href);
+  if (matchMedia('(min-width: 1024px)').matches && entry.searchParams.get('layout') !== 'classic') {
+    const desktop = new URL('./thuc_hanh_v2.html', entry);
+    desktop.search = entry.search;
+    desktop.hash = entry.hash;
+    location.replace(desktop);
+  }
+</script>
 <link rel="stylesheet" href="./src/free/free.css">
 <link rel="stylesheet" href="./src/free/ds.css">
 <!-- Bản thử kiểu chữ (21/11): chỉ có tác dụng khi địa chỉ có ?font=inter2|plex|bevn, &pt=mono, &bo=10. Không tham số thì không làm gì. -->
