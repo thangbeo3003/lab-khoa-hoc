@@ -107,38 +107,82 @@ export function mountDS(c) {
   // ---------- thanh thao tác: ống đích · hoá chất · lượng · thêm lần nữa · nút chính theo ngữ cảnh ----------
   const D = {}; let doseSig = '';
   const stepOf = (u) => (u === 'mL' ? (capOf(S.tube) >= 50 ? 5 : 0.5) : 1), maxOf = (u) => (u === 'mL' ? capOf(S.tube) : u === 'giot' ? 40 : 3); // cốc 100 mL: bước 5 mL
-  function setAmt(v) {
-    const u = unitOf(S.chem);
-    if (Number.isFinite(v)) {
-      const amount = u === 'mL' ? v : Math.round(v);
-      S.amount[u] = Math.min(maxOf(u), Math.max(u === 'mL' ? 0.1 : 1, amount));
+  const minOf = (u) => u === 'mL' ? 0.1 : 1;
+  function setDoseError(message) {
+    D.error.textContent = message;
+    D.error.hidden = !message;
+    D.inp.setAttribute('aria-invalid', String(!!message));
+  }
+  function readDose({ focus = false, format = false } = {}) {
+    const u = unitOf(S.chem), raw = D.inp.value.trim();
+    const n = /^(?:\d+(?:[.,]\d*)?|[.,]\d+)$/.test(raw) ? Number(raw.replace(',', '.')) : NaN;
+    const min = minOf(u), max = maxOf(u), unit = u === 'giot' ? 'giọt' : u === 'piece' ? 'mẩu' : 'mL';
+    const valid = Number.isFinite(n) && n >= min && n <= max && (u === 'mL' || Number.isInteger(n));
+    setDoseError(valid ? '' : u === 'mL' ? `Nhập từ 0,1 đến ${max} mL.` : `Nhập số nguyên từ 1 đến ${max} ${unit}.`);
+    if (!valid) {
+      if (focus) D.inp.focus();
+      return null;
     }
-    D.inp.value = String(S.amount[u]).replace('.', ',');
+    S.amount[u] = n;
+    if (format) D.inp.value = String(n).replace('.', ',');
+    return n;
   }
   // Mở tủ hoá chất và đặt con trỏ vào ô tìm: dùng cho nút chính khi chưa chọn chất và cho ô "Hoá chất" trên thanh thao tác
   function openCab() { setTab('chem'); if (V2) app.classList.add('menu-open'); else if (wide.matches) S.dock = true; else S.cabOpen = true; cabState(); setTimeout(() => search.focus(), 60); }
   { D.tube = el('strong', {}); D.chem = el('button', { class: 'dose-chem', type: 'button', title: 'Mở tủ hoá chất để chọn hoặc đổi chất', onclick: openCab }); D.unit = el('span', {}); D.hint = el('p', { class: 'dose-hint', 'aria-live': 'polite' });
-    D.inp = el('input', { type: 'text', inputmode: 'decimal', id: 'amount' });
-    D.inp.addEventListener('change', () => { const id = S.chem; if (id) setAmt(Number(D.inp.value.trim().replace(',', '.')) || NaN); }); D.inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') D.inp.blur(); e.stopPropagation(); });
-    const stepBtn = (ic, name, dir) => el('button', { class: 'step', type: 'button', 'aria-label': name, onclick: () => { const id = S.chem; if (id) { const u = unitOf(id); setAmt(Number((S.amount[u] + dir * stepOf(u)).toPrecision(12))); } } }, icon(ic));
+    D.inp = el('input', { type: 'text', inputmode: 'decimal', id: 'amount', 'aria-describedby': 'doseError' });
+    D.error = el('p', { id: 'doseError', class: 'dose-error', 'aria-live': 'polite', hidden: true });
+    D.inp.addEventListener('input', () => { if (S.chem) readDose(); });
+    D.inp.addEventListener('change', () => { if (S.chem) readDose({ format: true }); });
+    D.inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && S.chem) readDose({ format: true }); e.stopPropagation(); });
+    const stepBtn = (ic, name, dir) => el('button', { class: 'step', type: 'button', 'aria-label': name, onclick: () => {
+      if (!S.chem) return;
+      const u = unitOf(S.chem), n = Number((S.amount[u] + dir * stepOf(u)).toPrecision(12));
+      D.inp.value = String(Math.min(maxOf(u), Math.max(minOf(u), n)));
+      readDose({ format: true });
+    } }, icon(ic));
     D.repeat = btn('quiet', 'rotate-ccw', 'Thêm lần nữa', { title: 'Thêm đúng chất và lượng vừa dùng vào bình đang chọn (phím cách)', onclick: () => A.repeat(false) });
-    D.go = btn('primary', 'pipette', 'Chọn hoá chất', { onclick: () => { const id = S.chem; if (!id) { openCab(); return; } const u = unitOf(id); A.addNow(id, S.tube, u, S.amount[u]); } });
+    D.go = btn('primary', 'pipette', 'Chọn hoá chất', { onclick: () => {
+      const id = S.chem;
+      if (!id) { openCab(); return; }
+      const n = readDose({ focus: true, format: true });
+      if (n !== null) A.addNow(id, S.tube, unitOf(id), n);
+    } });
     put($('doseBar'), V2 ? el('div', { class: 'dose-brand' }, btn('quiet icon-only menu-toggle', 'menu', null, { 'aria-label': 'Mở menu', onclick: () => app.classList.add('menu-open') }), el('div', { class: 'dose-brand-title' }, el('small', {}, 'Lab Khoa Học › Bàn thực hành'), el('h1', {}, 'Thực hành tự do'))) : null, el('div', { class: 'dose-field tube-target' }, el('span', {}, 'Bình đích'), D.tube), el('div', { class: 'dose-field reagent' }, el('span', {}, 'Hoá chất'), D.chem),
-      el('div', { class: 'dose-field' }, el('label', { for: 'amount' }, 'Lượng'), el('div', { class: 'dose-amount' }, stepBtn('minus', 'Giảm lượng', -1), D.inp, stepBtn('plus', 'Tăng lượng', 1), D.unit)), D.hint, D.repeat, D.go); }
+      el('div', { class: 'dose-field' }, el('label', { for: 'amount' }, 'Lượng'), el('div', { class: 'dose-amount' }, stepBtn('minus', 'Giảm lượng', -1), D.inp, stepBtn('plus', 'Tăng lượng', 1), D.unit), D.error), D.hint, D.repeat, D.go); }
   function renderDose() { const id = S.chem, u = id ? unitOf(id) : 'mL', verb = u === 'piece' ? 'Thả' : u === 'giot' ? 'Nhỏ' : 'Rót';
     D.tube.textContent = Tn(S.tube); D.chem.textContent = id ? chemName(id) : 'Chọn trong tủ'; D.chem.classList.toggle('todo', !id);
-    D.inp.disabled = !id; if (document.activeElement !== D.inp) D.inp.value = String(S.amount[u]).replace('.', ',');
+    D.inp.disabled = !id;
     const both = !!id && u !== 'piece' && id !== 'pp' && id !== 'H2O', sig = `${id}|${u}|${both}`;
-    if (sig !== doseSig) { doseSig = sig; put(D.unit, both ? el('span', { class: 'segmented-track', role: 'group', 'aria-label': 'Đơn vị' }, ['mL', 'giot'].map((x) => el('button', { type: 'button', 'aria-pressed': String(u === x), onclick: () => { S.unit = x; A.render(); } }, x === 'mL' ? 'mL' : 'giọt'))) : u === 'piece' ? pieceUnit(id) : u === 'giot' ? 'giọt' : 'mL'); }
+    if (sig !== doseSig) {
+      doseSig = sig;
+      setDoseError('');
+      D.inp.value = String(S.amount[u]).replace('.', ',');
+      put(D.unit, both ? el('span', { class: 'segmented-track', role: 'group', 'aria-label': 'Đơn vị' }, ['mL', 'giot'].map((x) => el('button', { type: 'button', 'aria-pressed': String(u === x), onclick: () => { S.unit = x; A.render(); } }, x === 'mL' ? 'mL' : 'giọt'))) : u === 'piece' ? pieceUnit(id) : u === 'giot' ? 'giọt' : 'mL'); }
     D.go.lastChild.textContent = id ? `${verb} vào ${tn(S.tube)}` : 'Chọn hoá chất'; D.go.replaceChild(icon(id ? 'pipette' : 'beaker'), D.go.firstChild); D.repeat.disabled = !S.lastAdd;
     D.hint.textContent = S.queue.length ? `Tiếp theo: ${S.queue[0].text}${S.queue.length > 1 ? ` (và ${S.queue.length - 1} việc nữa)` : ''}.` : !id ? 'Chọn một chất trong tủ hoá chất, hoặc chạm một lọ đang ở trên bàn.' : `Hoặc chạm thẳng vào một bình trên bàn để ${low(verb)} ngay.`; }
 
   // ---------- hàng dưới sân khấu: bộ chọn ống A–E · hành động của ống đang chọn · dụng cụ ----------
-  const T = { armed: false };
+  const T = { armed: null };
+  function cancelDiscard() {
+    T.armed = null;
+    clearTimeout(T.t);
+  }
   { T.sel = el('div', { class: 'tube-selector', role: 'group', 'aria-label': 'Chọn bình đích' });
     T.view = btn('quiet', 'scan', 'Cận cảnh', { title: 'Phóng tới bình đang chọn, có nhãn chỉ vào từng lớp', onclick: () => A.setView(bench.currentView() === 'tube' ? 'all' : 'tube') });
     // Đổ bỏ là hành động của riêng ống đang chọn; có chất thì hỏi lại một lần (bấm lần nữa trong 3 giây)
-    T.dis = btn('quiet soft-danger', 'trash-2', 'Đổ bỏ', { onclick: () => { const t = S.tubes[S.tube], need = t.vol > 0 || Object.keys(t.items).length > 0; if (!need || T.armed) { T.armed = false; clearTimeout(T.t); A.discard(); renderTubes(); return; } T.armed = true; renderTubes(); T.t = setTimeout(() => { T.armed = false; renderTubes(); }, 3000); } });
+    T.dis = btn('quiet soft-danger discard-btn', 'trash-2', 'Đổ bỏ', { onclick: () => {
+      const vessel = S.tubes[S.tube];
+      if (T.armed === vessel) {
+        cancelDiscard();
+        A.discard();
+      } else {
+        cancelDiscard();
+        T.armed = vessel;
+        T.t = setTimeout(() => { cancelDiscard(); renderTubes(); }, 3000);
+      }
+      renderTubes();
+    } });
     const sep = () => el('span', { class: 'sep', 'aria-hidden': 'true' });
     // Hai tầng (chủ dặn 19/11): tầng 1 = bộ chọn ống + hành động của riêng ống đang chọn; tầng 2 = MỌI dụng cụ và phép thử đều hiện sẵn, không giấu trong "Thêm".
     T.needs = []; const need = (b) => { T.needs.push(b); return b; };
@@ -162,13 +206,32 @@ export function mountDS(c) {
         el('div', { class: 'tool-bar end', role: 'group', 'aria-label': 'Bàn' }, T.sound, T.clear))); }
   function renderTubes() {
     const vs = onBench(); T.sel.style.gridTemplateColumns = `repeat(${vs.length},minmax(0,1fr))`; T.sel.classList.toggle('many', vs.length > 6 || V2);
-    const vesselScroll = T.sel.scrollLeft;
-    put(T.sel, vs.map((i) => { const t = S.tubes[i], on = S.tube === i, L = S.last[i], sign = !!L && L.events.some((e) => e.kind === 'reaction' || e.kind === 'indicator');
-      return el('button', { type: 'button', 'aria-pressed': String(on), title: sign ? `${Tn(i)}: ${seenShort(L.events)}` : null, onclick: () => A.selectTube(i) }, el('b', {}, Tn(i)), on ? icon('check') : null,
-        el('span', { class: 'reading' }, t.vol > 0.001 ? `${fm(t.vol, t.vol < 1 ? 2 : 1)} mL` : Object.keys(t.items).length ? 'Chất rắn' : 'Trống'), sign ? el('i', { class: 'sign', role: 'img', 'aria-label': 'có hiện tượng' }) : null); }));
-    if (V2) T.sel.scrollLeft = vesselScroll;
+    const vesselScroll = T.sel.scrollLeft, previous = [...T.sel.children];
+    const buttons = vs.map((i) => {
+      const t = S.tubes[i], on = S.tube === i, L = S.last[i], sign = !!L && L.events.some((e) => e.kind === 'reaction' || e.kind === 'indicator');
+      const button = previous.find((item) => item.dataset.vessel === String(i)) ||
+        el('button', { type: 'button', 'data-vessel': i, onclick: () => A.selectTube(i) });
+      button.setAttribute('aria-pressed', String(on));
+      if (sign) button.title = `${Tn(i)}: ${seenShort(L.events)}`;
+      else button.removeAttribute('title');
+      put(button, el('b', {}, Tn(i)), on ? icon('check') : null,
+        el('span', { class: 'reading' }, t.vol > 0.001 ? `${fm(t.vol, t.vol < 1 ? 2 : 1)} mL` : Object.keys(t.items).length ? 'Chất rắn' : 'Trống'),
+        sign ? el('i', { class: 'sign', role: 'img', 'aria-label': 'có hiện tượng' }) : null);
+      return button;
+    });
+    if (previous.length !== buttons.length || buttons.some((button, i) => button !== previous[i])) {
+      const focused = document.activeElement;
+      put(T.sel, buttons);
+      if (V2) T.sel.scrollLeft = vesselScroll;
+      if (previous.includes(focused)) (buttons.includes(focused) ? focused : buttons.find((item) => item.dataset.vessel === String(S.tube)))?.focus({ preventScroll: true });
+    }
     const cur = S.tubes[S.tube], empty = !(cur.vol > 0) && !Object.keys(cur.items).length, anything = S.log.length > 0 || bench.onBench().length > 0 || S.tubes.some((t) => t.vol > 0 || Object.keys(t.items).length > 0);
-    T.dis.lastChild.textContent = T.armed ? 'Bấm lần nữa' : V2 ? 'Đổ bỏ' : `Đổ bỏ ${tn(S.tube)}`; T.dis.title = empty ? `${Tn(S.tube)} đang trống` : `Đổ bỏ và rửa ${tn(S.tube)}`; T.dis.disabled = empty; T.dis.classList.toggle('armed', T.armed); T.clear.disabled = !anything;
+    if (T.armed && (T.armed !== cur || empty)) cancelDiscard();
+    const armed = T.armed === cur;
+    T.dis.lastChild.textContent = armed ? 'Bấm lần nữa' : V2 ? 'Đổ bỏ' : `Đổ bỏ ${tn(S.tube)}`;
+    T.dis.setAttribute('aria-label', armed ? `Xác nhận đổ bỏ ${tn(S.tube)}` : `Đổ bỏ ${tn(S.tube)}`);
+    T.dis.title = empty ? `${Tn(S.tube)} đang trống` : `Đổ bỏ và rửa ${tn(S.tube)}`;
+    T.dis.disabled = empty; T.dis.classList.toggle('armed', armed); T.clear.disabled = !anything;
     for (const b of T.needs) b.classList.toggle('off', empty); // ống trống: các phép thử cần có chất mờ đi (vẫn bấm được để hiện lời nhắc)
     const close = bench.currentView() === 'tube'; T.view.lastChild.textContent = close ? 'Toàn bàn' : 'Cận cảnh'; T.view.classList.toggle('on', close);
     if (V2) T.view.setAttribute('aria-pressed', String(close));
@@ -193,7 +256,7 @@ export function mountDS(c) {
     const pl = big ? 46 : 3, pr = big ? 14 : 6, pt = big ? 14 : 5, pb = big ? 34 : 4, X = (v) => pl + (v / xm) * (W - pl - pr), Y = (y) => H - pb - (y / (ym * 1.12)) * (H - pt - pb), last = pts[pts.length - 1];
     const d = pts.map((p, k) => `${k ? 'L' : 'M'}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' '), txt = (x, y, t, anchor = 'middle') => { const n = sv('text', { x, y, 'text-anchor': anchor, 'font-size': 11, fill: 'var(--muted)' }); n.textContent = t; return n; };
     let up = 0; for (let k = 1; k < pts.length; k++) if (pts[k][1] > pts[k - 1][1] + 1e-9) up = k; const flat = up > 0 && last[0] > pts[up][0] + 0.2;
-    const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Lượng ${pretty(f)} theo thể tích trong bình`, style: `width:${W}px;height:${H}px;max-width:100%;flex:none` },
+    const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Lượng ${pretty(f)} theo thể tích trong bình`, width: W, height: H, style: 'max-width:100%;flex:none' },
       sv('path', { d: `${d} L${X(last[0]).toFixed(1)},${Y(0)} L${X(0)},${Y(0)} Z`, fill: 'var(--accent-soft)' }), sv('line', { x1: X(0), y1: Y(0), x2: X(xm), y2: Y(0), stroke: 'var(--control-border)', 'stroke-width': 1 }),
       big ? sv('line', { x1: X(0), y1: Y(0), x2: X(0), y2: pt - 4, stroke: 'var(--control-border)', 'stroke-width': 1 }) : null, big ? sv('line', { x1: X(0), y1: Y(ym), x2: X(xm), y2: Y(ym), stroke: 'var(--border)', 'stroke-width': 1, 'stroke-dasharray': '3 4' }) : null,
       sv('path', { d, fill: 'none', stroke: 'var(--accent)', 'stroke-width': big ? 2.5 : 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }), sv('circle', { cx: X(last[0]), cy: Y(last[1]), r: big ? 4 : 3, fill: 'var(--accent)' }),
@@ -204,13 +267,17 @@ export function mountDS(c) {
 
   // ---------- dải kết quả: quan sát · phương trình · đồ thị nhỏ · Chi tiết ----------
   const R = {};
+  let viewingHistory = false;
+  function renderResultTime() {
+    R.eye.textContent = `${viewingHistory ? 'Kết quả hiện tại' : 'Quan sát'} · ${Tn(S.tube)}`;
+  }
   { R.eye = el('span', { class: 'eyebrow' }); R.ph = el('strong', {}); R.eq = el('strong', { class: 'equation' }); R.det = btn('secondary', null, 'Chi tiết', { onclick: openDetails }); R.det.append(icon('chevron-right'));
     R.chart = el('div', { class: 'spark', title: 'Lượng sản phẩm theo tổng thể tích trong ống. Bấm Chi tiết để xem bản to.' });
     R.safe = el('p', { class: 'safety-note', role: 'note', hidden: true, style: 'flex:1 1 100%;order:9;margin:0;padding:5px 10px;border-radius:8px;background:#fdf3e2;color:var(--warning);font-size:12.5px;line-height:1.35;font-weight:600' }); // cảnh báo an toàn do máy phản ứng trả về (mục 48): một dòng ở dải kết quả, đủ câu trong Chi tiết
     put($('resultDs'), el('div', { class: 'result-state' }, R.eye, R.ph), R.eq, R.safe, R.chart, R.det); }
   const parts = (ti) => { const L = S.last[ti], ev = (L && L.events) || []; return { L, rx: ev.filter((e) => e.kind === 'reaction'), ind: ev.find((e) => e.kind === 'indicator'), first: ev[0] }; };
   function renderResult() { const ti = S.tube, t = S.tubes[ti], N = S.note[ti], { L, rx, ind, first } = parts(ti); let text, cls = '', eq = [];
-    R.eye.textContent = `Quan sát · ${Tn(ti)}`;
+    renderResultTime();
     // Một lần thêm có thể có nhiều phản ứng (mục 48): dải kết quả hiện phương trình đầu tiên CÓ HIỆN TƯỢNG,
     // các phương trình còn lại giữ nguyên thứ tự xảy ra và xem đủ trong Chi tiết.
     if (rx.length) { const withEq = rx.filter((e) => e.r.equation); text = cap(seenShort(L.events)); eq = [...withEq.filter(visibleFx), ...withEq.filter((e) => !visibleFx(e))].map((e) => e.r.equation); }
@@ -244,6 +311,8 @@ export function mountDS(c) {
     render() { cabList(); if (S.cabTab === 'tools') toolList(); renderDose(); renderTubes(); renderResult(); cabState(); },
     hint: renderDose,
     view: renderTubes,
+    dose: () => readDose({ focus: true, format: true }),
+    replay(active) { viewingHistory = active; renderResultTime(); },
     book() { bookCount.textContent = String(S.log.length); bookBtn.setAttribute('aria-expanded', String(!!S.book)); },
   };
 }

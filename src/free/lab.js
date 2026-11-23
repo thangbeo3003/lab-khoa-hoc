@@ -213,7 +213,10 @@ function pick(pid) {
   if (kind === 'chem') { selectChem(v); return; }
   if (kind === 'away') { putAwayOne(v); return; }
   const i = Number(v); selectTube(i);
-  if (kind === 'tube' && S.chem) addNow(S.chem, i, unitOf(S.chem), S.amount[unitOf(S.chem)]);
+  if (kind === 'tube' && S.chem) {
+    const unit = unitOf(S.chem), amount = UI ? UI.dose() : S.amount[unit];
+    if (amount !== null) addNow(S.chem, i, unit, amount);
+  }
 }
 
 // ---------- thêm chất ----------
@@ -348,6 +351,10 @@ function lensFeed(ti, added, events) { if (!LENS || !lens || ti !== S.tube || le
   const evs = events.filter((e) => e.kind === 'reaction' && e.r.eq).map((e) => { try { const m = buildModel(e, t); return { key: e.r.equation, lhs: m.lhs, rhs: m.rhs, species: m.species, mmol: e.extent * 1000 * m.perEq, tint: tints(t) }; } catch (err) { return null; } }).filter(Boolean);
   lens.feed({ added, events: evs, target: popOf(ti) }); lensTint(ti); }
 function layoutLens() { const sw = $('stagewrap'), w = sw.clientWidth, h = sw.clientHeight; if (w < 300) return; const narrow = DS && w < 900, hud = narrow ? 0 : 240; sw.classList.toggle('nohud', narrow); // sân khấu hẹp: ẩn bảng đếm để bàn không bị ép nhỏ
+  if (HUD.toggle && !narrow) {
+    sw.classList.remove('hud-open');
+    HUD.toggle.setAttribute('aria-expanded', 'false');
+  }
   const capOff = DS && !narrow, low = capOff ? 82 : 112; // trang design system: bảng "Bên trong ống" đã nói đủ nên bỏ dòng chữ dưới vòng kính, vòng kính to thêm và thanh tua có khoảng thở
   // Hai cách xếp vòng kính và bảng đếm: (A) bảng đứng bên phải vòng kính; (B) bảng nằm DƯỚI vòng kính thành một cột bên phải.
   // Sân khấu cao (bố cục v2) mà xếp kiểu A thì vòng kính + bảng giữ hơn nửa bề ngang, bàn bị ép nhỏ và phần cao thêm bỏ trống.
@@ -356,6 +363,7 @@ function layoutLens() { const sw = $('stagewrap'), w = sw.clientWidth, h = sw.cl
   const dA = Math.max(160, Math.min(h - low, (w - hud) * 0.36)), rA = (dA + hud + 70) / w, dB = Math.min(h - 12 - 56 - HUD_MIN - 8, w * 0.3), rB = (dB + 56) / w;
   const stack = DS && !narrow && dB >= 260 && benchK(rB) >= benchK(rA) * 1.2; sw.classList.toggle('stack', stack);
   const d = stack ? dB : dA, left = stack ? w - 22 - d : w - hud - 40 - d, top = stack ? 12 : Math.max(10, (h - d - (low - 28)) / 2), L = $('lens'), C = $('lensCap'), T = $('lvTime'), HU = $('lensHud');
+  if (HUD.toggle && narrow) sw.style.setProperty('--lens-left', left + 'px');
   Object.assign(L.style, { left: left + 'px', top: top + 'px', width: d + 'px', height: d + 'px' }); C.style.display = capOff ? 'none' : ''; Object.assign(C.style, { left: left - 30 + 'px', width: d + 60 + 'px', top: top + d + 10 + 'px' }); if (T) { const tw = Math.max(d, 240), tl = Math.max(8, Math.min(left + (d - tw) / 2, w - 8 - tw)); Object.assign(T.style, { left: tl + 'px', width: tw + 'px', top: top + d + (stack ? 10 : capOff ? 16 : 44) + 'px' }); } // 21/11 (A7·F3): vòng kính nhỏ hơn 240 px thì thanh tua vẫn rộng 240, canh giữa dưới vòng kính và không vượt mép phải sân khấu (trước đây nút "Hiện tại" bị cắt ở 1024 px)
   if (HU) Object.assign(HU.style, stack ? { left: left - 10 + 'px', width: d + 20 + 'px', top: top + d + 10 + 46 + 8 + 'px' } : { left: '', width: '', top: '' });
   // hộp zoom hạt: nằm cạnh tiêu đề bảng "Bên trong ống" (không đè viền vòng kính, không lẫn với hộp zoom bàn); bảng ẩn thì nổi ở góc vòng kính như cũ
@@ -364,20 +372,31 @@ function layoutLens() { const sw = $('stagewrap'), w = sw.clientWidth, h = sw.cl
 // Thanh tua thời gian của khung hạt: kéo để xem lại từng lúc, mốc trắng = lúc cho chất vào, mốc xanh = lúc các hạt gặp nhau.
 const TL = { info: null, drag: false, n: -1, who: null, ghost: false }, LZ = {};
 function buildTimeline() { const host = $('lvTime'); if (!host) return;
-  TL.play = el('button', { class: 'tl-play', title: 'Phát lại đợt vừa rồi / dừng', onclick: () => { const i = TL.info; if (!i) return; if (i.playing) { lens.pause(); return; } if (!i.live) { lens.play(); return; } const last = i.marks.filter((m) => m.type === 'add').pop(); if (!lens.play(Math.max(i.t0, (last ? last.t : i.t0) - 0.4))) toast('Chưa có gì để phát lại.'); } }, '▶');
+  TL.play = el('button', { class: 'tl-play', 'aria-label': 'Phát lại', title: 'Phát lại đợt vừa rồi / dừng', onclick: () => { const i = TL.info; if (!i) return; if (i.playing) { lens.pause(); return; } if (!i.live) { lens.play(); return; } const last = i.marks.filter((m) => m.type === 'add').pop(); if (!lens.play(Math.max(i.t0, (last ? last.t : i.t0) - 0.4))) toast('Chưa có gì để phát lại.'); } }, '▶');
   TL.range = el('input', { type: 'range', min: 0, max: 1000, step: 1, value: 1000, 'aria-label': 'Tua thời gian trong khung hạt' }); TL.marks = el('div', { class: 'tl-marks' }); TL.lab = el('span', { class: 'tl-lab' }, 'Trực tiếp');
-  TL.live = el('button', { title: 'Thôi xem lại, trở về lúc này', onclick: () => lens.goLive() }, 'Hiện tại');
-  TL.range.addEventListener('input', () => { const i = TL.info; if (!i) return; lens.pause(); lens.seek(i.t0 + (Number(TL.range.value) / 1000) * (i.t1 - i.t0)); });
+  TL.live = el('button', { title: 'Thôi xem lại, trở về lúc này', onclick: () => { lens.goLive(); renderTime(lens.timeline()); } }, 'Hiện tại');
+  TL.range.addEventListener('input', () => {
+    const i = TL.info;
+    if (!i) return;
+    lens.pause();
+    lens.seek(i.t0 + (Number(TL.range.value) / 1000) * (i.t1 - i.t0));
+    renderTime(lens.timeline());
+  });
   TL.range.addEventListener('pointerdown', () => { TL.drag = true; }); addEventListener('pointerup', () => { TL.drag = false; }); TL.range.addEventListener('keydown', (e) => e.stopPropagation());
   put(host, TL.play, el('div', { class: 'tl-track' }, TL.marks, TL.range), TL.lab, TL.live); }
 function renderTime(i) { TL.info = i; if (!TL.range) return; const span = Math.max(0.001, i.t1 - i.t0);
   // bàn tua theo: lúc trực tiếp thì chụp trạng thái các ống (5 lần mỗi giây); lúc tua thì bàn vẽ lại đúng bản chụp của thời điểm đó
   if (bench.snap) { if (i.live) { if (!SNAP.length || i.t1 - SNAP[SNAP.length - 1].t >= 0.2) SNAP.push({ t: i.t1, s: bench.snap() }); while (SNAP.length > 2 && SNAP[1].t <= i.t0) SNAP.shift(); if (TL.ghost) { TL.ghost = false; bench.ghost(null); } } else { let k = SNAP.length - 1; while (k > 0 && SNAP[k].t > i.at) k--; if (SNAP[k]) { bench.ghost(SNAP[k].s); TL.ghost = true; } } }
   $('stagewrap').classList.toggle('past', !i.live); $('lensEmpty').style.visibility = i.live ? '' : 'hidden';
+  if (TL.liveMode !== i.live) {
+    TL.liveMode = i.live;
+    UI?.replay(!i.live);
+  }
   // chưa có gì để tua (chưa rót chất nào, khung không có hạt): ẩn thanh tua và nút xem lại, bàn lúc mới vào sạch hơn
   { const used = i.n > 0 || !i.live || i.marks.some((m) => m.type !== 'cut'); $('lvTime').classList.toggle('idle', !used); HUD.again.style.display = i.marks.some((m) => m.type === 'rx') ? '' : 'none'; }
-  { const w = i.who != null ? i.who : S.tube, key = w + (i.live ? 'L' : 'P'); if (TL.who !== key) { TL.who = key; HUD.title.textContent = i.live ? `Bên trong ${tn(w)}` : `${Tn(w)} · trước`; if ($('lensCap')) put($('lensCap'), i.live ? `Kính lúp đang soi ${tn(w)}` : `Đang xem lại ${tn(w)}`, el('small', {}, 'phóng to hàng chục triệu lần (minh hoạ)')); const m = modelOf(w); put(HUD.evt, m ? [el('b', {}, m.ionic), m.spect.length ? `Không tham gia: ${m.spect.map((x) => x.label).join(', ')}.` : ''] : null); } }
+  { const w = i.who != null ? i.who : S.tube, key = w + (i.live ? 'L' : 'P'); if (TL.who !== key) { TL.who = key; HUD.title.textContent = i.live ? `Bên trong ${tn(w)}` : `${Tn(w)} · trước`; if ($('lensCap')) put($('lensCap'), i.live ? `Kính lúp đang soi ${tn(w)}` : `Đang xem lại ${tn(w)}`, el('small', {}, 'phóng to hàng chục triệu lần (minh hoạ)')); const m = i.live ? modelOf(w) : null; put(HUD.evt, m ? [el('b', {}, m.ionic), m.spect.length ? `Không tham gia: ${m.spect.map((x) => x.label).join(', ')}.` : ''] : null); } }
   if (LZ.lab) LZ.lab.textContent = `${Math.round((i.zoom || 1) * 100)}%`;
+  TL.play.setAttribute('aria-label', i.playing ? 'Tạm dừng phát lại' : 'Phát lại');
   if (!TL.drag) TL.range.value = Math.round(((i.at - i.t0) / span) * 1000); TL.play.textContent = i.playing ? '❚❚' : '▶'; TL.live.disabled = i.live;
   TL.lab.textContent = i.live ? (i.busy ? (i.warp > 1.5 ? `Tua nhanh ×${Math.round(i.warp)}` : 'Quay chậm') : 'Trực tiếp') : `−${fm(i.t1 - i.at, 1)} s`; TL.lab.title = i.live && i.warp > 1.5 ? 'Các hạt chuyển động hỗn loạn, chưa gặp đúng nhau nên khung tua nhanh thời gian. Không có gì kéo chúng lại.' : ''; TL.lab.classList.toggle('past', !i.live);
   if (TL.n !== i.marks.length) { TL.n = i.marks.length; put(TL.marks, i.marks.map((m) => el('i', { class: m.type, title: m.text }))); }
@@ -385,6 +404,13 @@ function renderTime(i) { TL.info = i; if (!TL.range) return; const span = Math.m
 function renderLens() {
   if (!lens) { HUD.title = el('h2', {}); HUD.sub = el('p', { class: 'sub' }); HUD.list = el('div', { class: 'hud-list' }); HUD.evt = el('div', { class: 'hud-evt' }); HUD.again = el('button', { title: 'Tua về ngay trước lúc các hạt gặp nhau rồi phát lại', onclick: () => { const M = (TL.info && TL.info.marks) || [], rx = M.filter((m) => m.type === 'rx'); if (!rx.length) { toast('Chưa có phản ứng nào trong ống này để xem lại.'); return; } const lastAdd = M.filter((m) => m.type === 'add').pop(), first = rx.find((m) => !lastAdd || m.t >= lastAdd.t) || rx[rx.length - 1]; lens.play(first.t - 0.8); } }, 'Xem lại lúc các hạt gặp nhau');
     HUD.head = el('div', { class: 'hud-head' }, HUD.title); put($('lensHud'), HUD.head, HUD.sub, HUD.list, HUD.evt, HUD.again);
+    if (document.documentElement.dataset.layout === 'v2') {
+      const stage = $('stagewrap');
+      HUD.toggle = el('button', { class: 'hud-toggle', type: 'button', 'aria-expanded': 'false', 'aria-controls': 'lensHud', onclick: () => {
+        HUD.toggle.setAttribute('aria-expanded', String(stage.classList.toggle('hud-open')));
+      } }, 'Bảng hạt');
+      stage.append(HUD.toggle);
+    }
     buildTimeline(); lens = mountLens($('lens'), { tintEl: $('lensTint'), onTime: renderTime, onStats: (rows, U, pending, scrub, rescaled) => {
       const description = { ion: 'trong dung dịch', mol: 'trong dung dịch', ppt: 'kết tủa, nằm ở đáy', solid: 'chất rắn chưa tan' };
       const order = { solid: 0, ion: 1, mol: 1, ppt: 2 };
@@ -511,12 +537,15 @@ const soundBtn = $('bSound'); const soundText = () => { soundBtn.textContent = S
 soundBtn.addEventListener('click', () => { S.sound = !S.sound; store.set('lab_free_sound', S.sound ? '1' : '0'); soundText(); if (S.sound) sfx.ding(); }); soundText();
 wide.addEventListener('change', layout);
 }
-addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('button'); if (b) b.blur(); }); // nút không giữ tiêu điểm, để phím cách không bấm lại nút vừa bấm
+if (!DS) addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && e.detail) b.blur(); });
 // Phím tắt (không nhận khi đang gõ trong ô số, ô tìm).
 addEventListener('keydown', (e) => {
-  if (e.target.matches('input, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.defaultPrevented || !(e.target instanceof Element) || e.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), dialog') || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key >= '1' && e.key <= '9') { const v = onBench()[Number(e.key) - 1]; if (v != null) { selectTube(v); e.preventDefault(); } } // phím 1–7: bình thứ mấy đang có trên bàn
-  else if (e.key === ' ') { repeat(true); e.preventDefault(); }
+  else if (e.key === ' ' && !e.target.closest('button, a[href], [role="button"]')) {
+    if (!e.repeat) repeat(true);
+    e.preventDefault();
+  }
   else if (e.key === 'l' || e.key === 'L') shake();
   else if (e.key === 'k' || e.key === 'K') stir();
   else if (e.key === 'Escape') { if (S.drawer) { S.drawer = null; render(); } else selectChem(null); }

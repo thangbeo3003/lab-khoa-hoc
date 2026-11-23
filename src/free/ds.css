@@ -91,6 +91,8 @@ html[data-ui="ds"] body { background:var(--canvas); color:var(--text); font:400 
 .ds .dose-field.reagent { flex:0 1 clamp(120px, 16vw, 220px); min-width:96px; }
 .ds .dose-amount { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted); }
 .ds .dose-amount input { width:59px; height:28px; padding:0 4px 0 6px; border:1px solid var(--control-border); border-radius:6px; color:var(--text); font:700 13px var(--font); background:#fff; }
+.ds .dose-amount input[aria-invalid="true"] { border-color: var(--danger); }
+.ds .dose-error { margin: 2px 0 0; color: var(--danger); font-size: 11px; line-height: 1.25; }
 .ds .dose-amount .step { all:unset; cursor:pointer; display:grid; place-items:center; width:26px; height:26px; border-radius:7px; color:var(--muted); } .ds .dose-amount .step:hover { background:var(--accent-soft); color:var(--accent-ink); }
 .ds .dose-hint { flex:1 1 0; min-width:0; color:var(--muted); font-size:12.5px; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .ds .dose-bar .primary { min-width:156px; }

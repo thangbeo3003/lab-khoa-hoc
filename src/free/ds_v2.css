@@ -356,3 +356,43 @@ html[data-layout="v2"] {
 .ds .lb-stagewrap.stack .hud-it { gap: 0 6px; }
 .ds .lb-stagewrap.stack .hud-it b { font-size: 13px; white-space: nowrap; }
 .ds .lb-stagewrap.stack .hud-it em { font-size: 12px; white-space: nowrap; }
+
+
+/* Bảng hạt vẫn truy cập được khi sân khấu desktop hẹp. */
+.ds.v2 .hud-toggle { display: none; }
+@media (min-width: 1024px) {
+  .ds.v2 .nohud .hud-toggle {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 4;
+    display: block;
+    padding: 6px 12px;
+    border: 1px solid #a2a5c1;
+    border-radius: 8px;
+    background: #242642;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .ds.v2 .nohud .hud-toggle[aria-expanded="true"] { background: var(--accent-hover); }
+  .ds.v2 .nohud.hud-open .lens-hud {
+    z-index: 4;
+    display: flex;
+    top: auto;
+    bottom: 52px;
+    right: calc(100% - var(--lens-left) + 12px);
+    width: min(310px, calc(var(--lens-left) - 24px));
+    max-height: calc(100% - 112px);
+    background: #20213a;
+  }
+  .ds.v2 .bottom-dock .result .spark:not(:empty) { display: flex; }
+  .ds.v2 .bottom-dock .result-state strong { white-space: normal; }
+  @container (max-width: 700px) {
+    .ds.v2 .bottom-dock .result .spark { gap: 5px; padding-inline: 6px 0; }
+    .ds.v2 .bottom-dock .result .spark svg { width: 68px; height: auto; }
+    .ds.v2 .bottom-dock .result .spark span,
+    .ds.v2 .bottom-dock .result .spark b { font-size: 11px; }
+    .ds.v2 .bottom-dock .result .spark small { display: none; }
+  }
+}
