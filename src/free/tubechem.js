@@ -216,6 +216,36 @@ export function look(t) {
 }
 export const pptTotal = (t) => t.ppt.reduce((s, p) => s + p.mol, 0);
 
+// Lọc trọng lực trong mô hình: thu toàn bộ dịch, giữ pha rắn trong giấy.
+export function canFilter(source) {
+  return source.vol > EPS && !source.pour &&
+    (source.ppt.some(({ mol }) => mol > EPS) || source.order.some((id) => isSolid(id) && source.items[id].mol > EPS));
+}
+export function filtrationIssue(source, receiver) {
+  if (source === receiver) return 'Chọn bình hứng khác bình nguồn.';
+  if (!canFilter(source)) return 'Chọn bình có dung dịch và chất rắn chưa tan hoặc kết tủa.';
+  if (receiver.vol > EPS || receiver.order.length || receiver.ppt.length || receiver.pour) return 'Bình hứng phải trống.';
+  if (source.vol > receiver.cap + 1e-9) return 'Bình hứng không đủ chỗ cho toàn bộ dịch lọc.';
+  return '';
+}
+export function separateFiltrate(source, receiver) {
+  const error = filtrationIssue(source, receiver);
+  if (error) return { error };
+  const filtrate = newTube(receiver.cap);
+  filtrate.vol = source.vol;
+  filtrate.order = source.order.filter((id) => !isSolid(id));
+  filtrate.items = Object.fromEntries(filtrate.order.map((id) => [id, { ...source.items[id] }]));
+  filtrate.tints = source.tints.map((entry) => ({ ...entry }));
+  filtrate.indicator = source.indicator;
+  filtrate.indShown = source.indShown;
+  const residue = source.ppt.filter(({ mol }) => mol > EPS).map(({ f, color, mol }) => ({ f, color, mol }));
+  for (const id of source.order) {
+    const { mol } = source.items[id];
+    if (isSolid(id) && mol > EPS) residue.push({ f: BY_ID[id].f, color: BY_ID[id].color, mol });
+  }
+  return { filtrate, residue };
+}
+
 // Danh sách hiển thị "Trong ống": những gì người dùng đã cho vào, kèm tình trạng còn hay hết.
 export function contents(t) {
   const fm = (x, d = 1) => x.toFixed(d).replace('.', ',');

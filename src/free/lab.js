@@ -2,7 +2,7 @@
 // Bố cục chốt 18/11 đêm: thanh thao tác trên bàn (bước hiện tại · chất đang chọn · lượng), bàn lab là khung to không có chữ đè,
 // dải kết quả dưới bàn, tủ hoá chất cố định bên trái trên màn rộng hoặc thành khay trên màn hẹp, khay Dụng cụ, sổ thu gọn.
 // Luồng chính: chọn chất → chỉnh lượng → chạm ống → thấy phản hồi ngay trên ống. Rót xong vẫn giữ chất đã chọn để thử ống khác.
-import { newTube, add, beginPour, endPour, look, contents, label, isSolid, pptTotal, DROP_ML, MAX_ML, PIECE, litmus, heat, SPLINT } from './tubechem.js';
+import { newTube, add, beginPour, endPour, canFilter, filtrationIssue, separateFiltrate, look, contents, label, isSolid, pptTotal, DROP_ML, MAX_ML, PIECE, litmus, heat, SPLINT } from './tubechem.js';
 import { BY_ID, CHEMS } from '../chem/data.js';
 import { pretty } from '../chem/formula.js';
 import { mountProcess3D } from './process3d.js';
@@ -41,7 +41,7 @@ const Tn = (i) => bench.tubes[i].name, tn = (i) => low(bench.tubes[i].name), cap
 const isOn = (i) => bench.tubes[i].on, onBench = () => TUBES.filter(isOn), isCup = (i) => bench.tubes[i].kind !== 'tube'; // "cốc" ở đây = mọi bình ngoài giá: cốc, bình tam giác, bình cầu, ống đong
 const fresh = (i) => newTube(bench.tubes[i].cap);
 const S = { tube: 0, chem: null, unit: 'mL', amount: { mL: 2, giot: 5, piece: 1 }, tubes: TUBES.map(fresh), last: TUBES.map(() => null), sum: TUBES.map(() => ({})), prod: TUBES.map(() => ({})), note: TUBES.map(() => null), gasUntil: TUBES.map(() => 0), log: [], curve: TUBES.map(() => []),
-  running: false, runId: null, queue: [], lastAdd: null, q: '', group: 'all', drawer: null, dock: true, book: false, sound: store.get('lab_free_sound', '1') === '1' };
+  running: false, filtering: false, runId: null, queue: [], lastAdd: null, q: '', group: 'all', drawer: null, dock: true, book: false, sound: store.get('lab_free_sound', '1') === '1' };
 
 const DS = document.documentElement.dataset.ui === 'ds'; let UI = null; // trang theo design system: phần vỏ quanh sân khấu do ui_ds.js dựng, các hàm render cũ bên dưới nhường chỗ
 
@@ -182,6 +182,7 @@ function record(ti, id, amt, how, events, B) {
 
 // ---------- hàng chờ: không khoá nút; bấm nhanh liên tiếp thì các việc chạy lần lượt theo đúng thứ tự (tối đa 8 việc chờ) ----------
 function act(text, run, id = null) {
+  if (S.filtering) { toast('Đợi lọc xong rồi thao tác tiếp.'); return; }
   if (S.running) { if (S.queue.length >= 8) { toast('Đang còn 8 việc chờ, đợi một chút.'); return; } S.queue.push({ text, run, id }); renderHint(); return; }
   S.running = true; S.runId = id; renderHint();
   run(() => { S.running = false; S.runId = null; const n = S.queue.shift(); if (n) act(n.text, n.run, n.id); else renderHint(); });
@@ -228,6 +229,7 @@ function check(id, ti, unit, v) { // → [số hợp lệ | null, lời báo]
   return v <= room + 1e-9 ? [v, ''] : [null, `${Tn(ti)} chỉ còn chỗ cho ${fm(Math.max(0, room), 1)} mL (chứa tối đa ${capOf(ti)} mL).`];
 }
 function addNow(id, ti, unit, v) {
+  if (S.filtering) { toast('Đợi lọc xong rồi thêm chất.'); return false; }
   const [n, msg] = check(id, ti, unit, v); if (n == null) { toast(msg); return false; }
   if (!bench.has(id)) { const r = bench.bringOut(id, inPlay()); if (r.full) { toast(`Bàn đã đủ ${bench.maxBottles || 5} lọ và đều đang dùng.`); return false; } }
   S.lastAdd = { id, unit, n }; bench.setAwait(false); lensPlan(ti, id, unit, n);
@@ -248,7 +250,50 @@ function repeat(one) { const a = S.lastAdd; if (!a) { toast('Chưa có lần th�
 function stir() { const ti = S.tube; if (S.tubes[ti].vol <= 0) { toast(`${Tn(ti)} đang trống.`); return; } if (!bench.stir) { toast('Bàn này chưa có đũa thuỷ tinh.'); return; } act(`khuấy ${tn(ti)}`, (done) => bench.stir(ti, () => { S.log.unshift({ ti, how: 'stir' }); render(); done(); })); }
 function shake() { const ti = S.tube; if (S.tubes[ti].vol <= 0) { toast(`${Tn(ti)} đang trống.`); return; } act(`lắc ${tn(ti)}`, (done) => bench.shake(ti, () => { S.log.unshift({ ti, how: 'shake' }); render(); done(); })); }
 function discard() { const ti = S.tube; act(`đổ bỏ ${tn(ti)}`, (done) => bench.discard(ti, () => { S.tubes[ti] = fresh(ti); S.last[ti] = null; S.sum[ti] = {}; S.prod[ti] = {}; S.curve[ti] = []; lensTube = -1; lensWhy = `Đổ bỏ ${tn(ti)}`; S.note[ti] = null; S.gasUntil[ti] = 0; S.log.unshift({ ti, how: 'discard' }); tubeTag(ti); render(); done(); })); }
-function clearAll() { S.queue.length = 0; bench.disarm(); S.chem = null; bench.setSelected(null, ''); bench.setAwait(false); bench.onBench().forEach((id) => bench.putAway(id));
+function filterSample(from, to) {
+  if (!bench.filter || S.running || !isOn(from) || !isOn(to)) {
+    toast('Đợi thao tác trên bàn hoàn tất rồi lọc.');
+    return false;
+  }
+  const { error, filtrate, residue } = separateFiltrate(S.tubes[from], S.tubes[to]);
+  if (error) { toast(error); return false; }
+
+  const dissolved = Object.fromEntries(Object.entries(S.prod[from])
+    .filter(([f, q]) => !q.mark && f !== 'H2O' && q.mol > 0 && !(BY_ID[f] && isSolid(f))));
+  const retained = residue.map(({ f, mol }) => `${pretty(f)} · ${fm(mol * 1000, 3)} mmol`).join(', ');
+  const amount = `${fm(filtrate.vol, 2)} mL`;
+  const result = `${amount} dịch lọc · ${Tn(to)}`;
+  if (lens && LENS) { lens.goLive(); renderTime(lens.timeline()); }
+  setView('all');
+  act(`lọc mẫu từ ${tn(from)}`, (done) => {
+    S.filtering = true;
+    bench.filter(from, to, filtrate.vol, look(filtrate), residue, () => {
+      S.filtering = false;
+      S.tubes[from] = fresh(from);
+      S.tubes[to] = filtrate;
+      for (const i of [from, to]) {
+        S.last[i] = null;
+        S.sum[i] = {};
+        S.prod[i] = i === to ? dissolved : {};
+        S.curve[i] = [];
+        S.gasUntil[i] = 0;
+        sync(i);
+        tubeTag(i);
+      }
+      S.note[from] = { tag: 'Lọc mẫu', seen: `Đã chuyển dịch sang ${tn(to)}`, why: `Trên giấy lọc: ${retained}.` };
+      S.note[to] = { tag: 'Lọc mẫu', seen: result, why: `Trên giấy lọc: ${retained}. Có thể tiếp tục thử dịch trong ${tn(to)}. Mô hình bỏ qua lượng dịch bám trên giấy.` };
+      S.log.unshift({ how: 'filter', ti: from, to, amount, retained });
+      lensTube = -1;
+      lensWhy = `Lọc mẫu sang ${tn(to)}`;
+      selectTube(to);
+      flash(to, 'Dịch lọc');
+      toast(`Đã lọc sang ${tn(to)}. Mở Chi tiết để xem phần giữ trên giấy.`);
+      done();
+    });
+  });
+  return true;
+}
+function clearAll() { if (S.filtering) { toast('Đợi lọc xong rồi dọn bàn.'); return false; } S.queue.length = 0; bench.disarm(); S.chem = null; bench.setSelected(null, ''); bench.setAwait(false); bench.onBench().forEach((id) => bench.putAway(id));
   bench.tubes.forEach((v) => v.reset()); TUBES.filter(isCup).forEach((i) => bench.stow(i)); S.tube = 0; bench.setActive(0); // dọn bàn: cốc cũng về tủ
   S.tubes = TUBES.map(fresh); S.last = TUBES.map(() => null); S.sum = TUBES.map(() => ({})); S.prod = TUBES.map(() => ({})); S.curve = TUBES.map(() => []); lensTube = -1; lensHard = true; SNAP.length = 0; S.note = TUBES.map(() => null); S.gasUntil = TUBES.map(() => 0); S.log = []; S.lastAdd = null; bench.tubes.forEach((v) => v.reset()); TUBES.forEach(tubeTag); bench.setFlash(0, ''); setView('all'); render(); }
 
@@ -498,6 +543,7 @@ function renderBook() {
     el('div', { class: 'bk-sec' }, el('h3', {}, 'Nhật ký', el('small', {}, 'tự ghi')), !S.log.length ? el('p', { class: 'fr-empty' }, 'Mỗi lần thêm chất hay làm một phép thử, sổ ghi lại: làm gì, bao nhiêu, thấy gì, phương trình.') :
       el('div', { class: 'fr-log' }, S.log.map((e, k) => { const n = S.log.length - k;
         if (e.how === 'shake') return el('div', {}, el('b', {}, `${n}. `), `Lắc ${tn(e.ti)}`); if (e.how === 'stir') return el('div', {}, el('b', {}, `${n}. `), `Khuấy ${tn(e.ti)} bằng đũa thuỷ tinh`); if (e.how === 'discard') return el('div', {}, el('b', {}, `${n}. `), `Đổ bỏ và rửa ${tn(e.ti)}`);
+        if (e.how === 'filter') return el('div', {}, el('b', {}, `${n}. `), `Lọc ${tn(e.ti)} → ${tn(e.to)}`, el('small', {}, `${e.amount} dịch lọc · Giữ trên giấy: ${e.retained}`));
         if (e.how === 'test') return el('div', {}, el('b', {}, `${n}. `), `${e.tag}, ${tn(e.ti)}`, el('small', {}, el('span', { class: 'fr-tag k-test' }, 'Phép thử'), e.seen));
         if (e.how === 'heat') return el('div', {}, el('b', {}, `${n}. `), `Đun nóng ${tn(e.ti)}`, el('small', {}, el('span', { class: 'fr-tag k-reaction' }, 'Có phản ứng'), e.seen), el('small', {}, e.eq));
         const what = e.how === 'drop' ? `Nhỏ ${e.n} giọt ${chemName(e.id)}` : e.how === 'solid' ? `Thả ${e.n} ${pieceUnit(e.id)}` : `Rót ${fm(e.mL, 2)} mL ${chemName(e.id)}`;
@@ -554,8 +600,8 @@ if (bench.flat) { const fitUI = () => { const k = Math.max(1, innerWidth / (DS ?
 bench.setSide(0); bench.setInset(false); bench.view('all', true);
 TUBES.forEach(tubeTag); bench.setActive(0);
 if (DS) { const { mountDS } = await import('./ui_ds.js'); // một tệp giao diện cho cả bố cục gốc và v2 (ui_ds.js tự đọc data-layout)
-  UI = mountDS({ S, bench, TUBES, Tn, tn, capOf, isOn, onBench, isCup, el, put, $, fm, num, cap, low, BY_ID, CAB, OLD, MAX_ML, label, isSolid, shortName, concText, chemName, listLabel, pieceUnit, unitOf, pretty, seenShort, indSay, modelOf, ratioText, norm, toast, visibleFx, safetyOf, notesOf,
-    A: { placeCup, stowCup, stir, selectChem, selectTube, addNow, repeat, shake, discard, clearAll, doLitmus, doSplint, doHeat, doThermo, setView, putAwayOne, render, renderBook, toggleSound() { S.sound = !S.sound; store.set('lab_free_sound', S.sound ? '1' : '0'); if (S.sound) sfx.ding(); } } });
+  UI = mountDS({ S, bench, TUBES, Tn, tn, capOf, isOn, onBench, isCup, el, put, $, fm, num, cap, low, BY_ID, CAB, OLD, MAX_ML, label, isSolid, shortName, concText, chemName, listLabel, pieceUnit, unitOf, pretty, seenShort, indSay, modelOf, ratioText, norm, toast, visibleFx, safetyOf, notesOf, canFilter, filtrationIssue,
+    A: { filterSample, placeCup, stowCup, stir, selectChem, selectTube, addNow, repeat, shake, discard, clearAll, doLitmus, doSplint, doHeat, doThermo, setView, putAwayOne, render, renderBook, toggleSound() { S.sound = !S.sound; store.set('lab_free_sound', S.sound ? '1' : '0'); if (S.sound) sfx.ding(); } } });
   render(); }
 else { cabs.push(buildCab($('cabDock'), true)); if (wide.matches) S.drawer = 'tools'; if (bench.flat && wide.matches) { const foot = $('bSound').parentElement; foot.insertBefore($('drawer'), foot.querySelector('.sp')); $('app').classList.add('toolsin'); } layout(); }
 

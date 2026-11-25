@@ -1,4 +1,4 @@
-import { newTube, add, look, pH, indicatorLook, contents, pptTotal, DROP_ML, litmus, heat, SPLINT, beginPour, endPour } from './tubechem.js';
+import { newTube, add, look, pH, indicatorLook, contents, pptTotal, DROP_ML, litmus, heat, SPLINT, beginPour, endPour, separateFiltrate } from './tubechem.js';
 import { ALKALI_SAFETY } from '../chem/data.js';
 let fail = 0; const ok = (c, m) => { if (!c) { fail++; console.log('  SAI:', m); } };
 const near = (a, b, e = 1e-9) => Math.abs(a - b) < e;
@@ -150,6 +150,33 @@ for (const order of [['Mg', 'H2O'], ['H2O', 'Mg']]) {
   { const t = newTube(); add(t, 'Na', { piece: true }); const q = eqs(pour(t, 'H2SO4', 2, 4)); ok(q.length === 5 && q.slice(0, 4).every((x) => x === '2Na + H₂SO₄ → Na₂SO₄ + H₂↑') && q[4] === NA_H2O && near(t.items.Na2SO4.mol, 0.001) && near(t.items.NaOH.mol, NA - 0.002), 'N7 Na + H₂SO₄: ' + q.join(' | '));
     for (const first of ['Na', 'HNO3']) { const u = newTube(); const ev = first === 'Na' ? (add(u, 'Na', { piece: true }), pour(u, 'HNO3', 2, 4)) : (add(u, 'HNO3', { mL: 2 }), add(u, 'Na', { piece: true }).events);
       ok(rx(ev).length === 0 && ev.some((e) => e.kind === 'na') && near(u.items.Na.mol, NA) && near(u.items.HNO3.mol, 0.002) && u.gasTotal === 0, `N7 ${first} trước, Na + HNO₃: chưa có dữ liệu, sổ giữ nguyên`); } }
+}
+// Lọc chuyển pha lỏng sang bình trống và giữ pha rắn, không làm phát sinh phản ứng.
+{
+  const source = newTube(), receiver = newTube();
+  add(source, 'CuSO4', { mL: 2 });
+  add(source, 'NaOH', { mL: 1 });
+  add(source, 'pp', { mL: DROP_ML, drop: true });
+  const { filtrate, residue } = separateFiltrate(source, receiver);
+  ok(near(filtrate.vol, 3.05) && filtrate.ppt.length === 0, 'dịch lọc giữ thể tích và không còn kết tủa');
+  ok(residue.length === 1 && residue[0].f === 'Cu(OH)2' && near(residue[0].mol, 0.0002), 'giấy lọc giữ đúng kết tủa');
+  ok(near(filtrate.items.NaOH.mol, source.items.NaOH.mol) && near(filtrate.items.Na2SO4.mol, source.items.Na2SO4.mol), 'giữ chất tan và chất dư');
+  ok(filtrate.indicator === 'pp' && near(pH(filtrate), pH(source)) && look(filtrate).hex === look(source).hex, 'chỉ thị, pH và màu dịch đi theo bình hứng');
+  ok(near(pptTotal(source), 0.0002) && receiver.vol === 0, 'tách pha không đổi hai đầu vào');
+  ok(rx(add(filtrate, 'CuSO4', { mL: 1 }).events).length > 0 && pptTotal(filtrate) > 0, 'dịch lọc tiếp tục phản ứng với chất mới');
+  ok(!!separateFiltrate(source, source).error && !!separateFiltrate(source, newTube(2)).error, 'chặn lọc về bình nguồn hoặc bình thiếu chỗ');
+  add(receiver, 'Zn', { piece: true });
+  ok(!!separateFiltrate(source, receiver).error, 'chặn bình hứng đang có chất rắn dù thể tích nước bằng 0');
+  ok(!!separateFiltrate(newTube(), newTube()).error, 'chặn mẫu nguồn trống');
+
+  const derived = newTube();
+  add(derived, 'HCl', { mL: 2 });
+  add(derived, 'Zn', { piece: true });
+  const filtered = separateFiltrate(derived, newTube());
+  ok(filtered.residue.some(({ f }) => f === 'Zn') && !filtered.filtrate.items.Zn, 'mẩu kim loại còn dư được giữ trên giấy');
+  ok(filtered.filtrate.gasTotal === 0 && filtered.filtrate.lastGas === null, 'khí đã thoát ra không đi sang bình hứng');
+  add(filtered.filtrate, 'NaOH', { mL: 4 });
+  ok(filtered.filtrate.ppt.some(({ f }) => f === 'Zn(OH)2'), 'muối tan phát sinh vẫn dùng được sau lọc');
 }
 console.log(fail ? `CẦN SỬA: ${fail} lỗi` : 'ĐẠT: sổ sách ống nghiệm');
 process.exit(fail ? 1 : 0);

@@ -4,7 +4,7 @@
 import { icon } from './icons.js';
 
 export function mountDS(c) {
-  const { S, bench, TUBES, Tn, tn, capOf, onBench, isCup, el, put, $, fm, cap, low, BY_ID, CAB, OLD, MAX_ML, label, isSolid, shortName, concText, chemName, listLabel, pieceUnit, unitOf, pretty, seenShort, indSay, modelOf, ratioText, norm, toast, visibleFx, safetyOf, notesOf, A } = c;
+  const { S, bench, TUBES, Tn, tn, capOf, onBench, isCup, el, put, $, fm, cap, low, BY_ID, CAB, OLD, MAX_ML, label, isSolid, shortName, concText, chemName, listLabel, pieceUnit, unitOf, pretty, seenShort, indSay, modelOf, ratioText, norm, toast, visibleFx, safetyOf, notesOf, canFilter, filtrationIssue, A } = c;
   const V2 = document.documentElement.dataset.layout === 'v2'; // bố cục v2 (thuc_hanh_v2.html, 21/11): sân khấu cao hết cỡ, tủ + cụm dụng cụ nằm ở cột trái, một thanh đáy. Cùng một tệp giao diện, chỉ khác chỗ đặt.
   const app = $('app'), ws = $('workspace'), wide = matchMedia('(min-width:1600px)'); // mốc tủ cố định, xem ghi chú trong ds.css
   const btn = (cls, ic, text, attrs = {}) => el('button', { class: cls, type: 'button', ...attrs }, ic ? icon(ic) : null, text != null ? el('span', {}, text) : null);
@@ -73,17 +73,52 @@ export function mountDS(c) {
     ['Thu khí', [{ name: 'Ống dẫn khí có nút cao su', img: 'delivery', soon: 'Dẫn khí sang ống thu' }, { name: 'Chậu thuỷ tinh', img: 'trough', soon: 'Thu khí bằng cách đẩy nước' }, { name: 'Ống cao su', img: 'rubbertube', soon: 'Nối các dụng cụ trong bộ lắp' }]],
     ['Phép thử', [{ name: 'Giấy quỳ', img: 'litmus', ic: 'litmus', use: 'Giấy quỳ', go: () => A.doLitmus(), sub: 'Thử dung dịch trong bình đang chọn' }, { name: 'Que đóm', img: 'splint', ic: 'splint', use: 'Que đóm', go: () => A.doSplint(), sub: 'Đưa tới miệng bình đang chọn' }, { name: 'Nhiệt kế', img: 'thermometer', ic: 'thermo', use: 'Nhiệt kế', go: () => A.doThermo(), sub: 'Đo bình đang chọn ấm lên hay không' }]],
   ];
+  const filterKit = ['stand', 'ring', 'funnel', 'filterpaper'];
+  function openFilter() {
+    if (S.running) { toast('Đợi thao tác trên bàn hoàn tất rồi lọc.'); return; }
+    const sources = onBench().filter((i) => canFilter(S.tubes[i]));
+    if (!sources.length) {
+      openLayer('Lọc mẫu', el('p', {}, 'Tạo kết tủa hoặc cho chất rắn chưa tan vào một bình có dung dịch. Sau đó mở lại Lọc mẫu.'));
+      return;
+    }
+    const source = el('select', { id: 'filterSource' }, sources.map((i) => el('option', { value: i }, `${Tn(i)} · ${fm(S.tubes[i].vol, 2)} mL`)));
+    const receiver = el('select', { id: 'filterReceiver', 'aria-describedby': 'filterHelp' });
+    const help = el('p', { id: 'filterHelp', role: 'status' });
+    const start = btn('primary', null, 'Lắp bộ lọc và lọc', { onclick: () => {
+      if (A.filterSample(Number(source.value), Number(receiver.value))) layer.close();
+    } });
+    function updateReceivers() {
+      const from = Number(source.value);
+      const empty = onBench().filter((i) => !filtrationIssue(S.tubes[from], S.tubes[i]));
+      receiver.replaceChildren(...empty.map((i) => el('option', { value: i }, `${Tn(i)} · tối đa ${capOf(i)} mL`)));
+      receiver.disabled = start.disabled = !empty.length;
+      help.textContent = empty.length
+        ? 'Dịch lọc chảy sang bình hứng. Chất rắn được giữ trên giấy.'
+        : 'Đặt một cốc hoặc bình trống đủ sức chứa lên bàn rồi mở lại Lọc mẫu.';
+    }
+    if (sources.includes(S.tube)) source.value = String(S.tube);
+    source.addEventListener('change', updateReceivers);
+    updateReceivers();
+    openLayer('Lọc mẫu',
+      el('div', { class: 'filter-fields' }, el('label', {}, 'Bình nguồn', source), el('label', {}, 'Bình hứng', receiver)),
+      help, el('div', { class: 'filter-actions' }, start));
+  }
   const thumb = (it) => { const src = it.img && bench.assetOf && bench.assetOf(it.img) && (bench.thumb ? bench.thumb({ img: it.img }, 44) : bench.assetOf(it.img)); return el('span', { class: 'tool-ic' + (src ? ' pic' : ''), 'aria-hidden': 'true' }, src ? el('img', { src, alt: '' }) : icon(it.ic || 'beaker')); }; // ảnh nhỏ kiểu B: vẽ bằng mã bàn, ô tông mặt bàn
   function toolList() {
-    const kids = []; for (const [g, items] of KHO) { kids.push(el('p', { class: 'tool-group' }, g));
-      for (const it of items) {
+    const entry = { name: 'Lọc mẫu', img: 'funnel', use: 'Lọc', go: openFilter, sub: 'Phễu, giấy lọc, giá sắt và vòng sắt' };
+    const groups = bench.filter ? [['Bộ lọc', [entry]], ...KHO] : KHO;
+    const kids = []; for (const [g, items] of groups) { kids.push(el('p', { class: 'tool-group' }, g));
+      for (const item of items) {
+        const it = bench.filter && item.soon && filterKit.includes(item.img)
+          ? { ...item, use: 'Bộ lọc', badge: 'Đã có', sub: 'Tự lắp cùng bộ lọc' }
+          : item;
         if (it.v === 'tube') { kids.push(el('div', { class: 'chem-row tool-row' }, thumb(it), el('span', { style: 'min-width:0' }, el('b', {}, it.name), el('span', { class: 'chem-name' }, it.sub)), el('span', { class: 'chem-meta' }, el('span', { class: 'on-bench' }, 'Trên bàn')))); continue; }
         if (it.v) { const all = TUBES.filter((i) => bench.tubes[i].kind === it.v); if (!all.length) { kids.push(el('div', { class: 'chem-row tool-row soon' }, thumb(it), el('span', { style: 'min-width:0' }, el('b', {}, it.name), el('span', { class: 'chem-name' }, 'Đang chuẩn bị ảnh')), el('span', { class: 'chem-meta' }, el('span', { class: 'soon-tag' }, 'Chưa dùng được')))); continue; }
           const on = all.filter((i) => bench.tubes[i].on), left = all.length - on.length, cap = bench.tubes[all[0]].cap;
           kids.push(el('button', { class: 'chem-row tool-row', type: 'button', disabled: !left, title: left ? 'Đặt lên bàn, thành bình đích' : 'Đã ở trên bàn', onclick: () => A.placeCup(it.v) }, thumb(it),
             el('span', { style: 'min-width:0' }, el('b', {}, it.name), el('span', { class: 'chem-name' }, left ? `Bấm để đặt lên bàn · chứa tối đa ${cap} mL${all.length > 1 ? ` · còn ${left} cái` : ''}` : 'Đã ở trên bàn')),
             el('span', { class: 'chem-meta' }, on.map((i) => el('span', { class: 'on-bench' }, Tn(i), el('span', { class: 'put', role: 'button', title: `Cất ${tn(i)} vào tủ (bình phải trống)`, 'aria-label': `Cất ${tn(i)} vào tủ`, onclick: (e) => { e.stopPropagation(); A.stowCup(i); } }, icon('x'))))))); continue; }
-        if (it.use) { kids.push(el(it.go ? 'button' : 'div', { class: 'chem-row tool-row', type: it.go ? 'button' : null, title: it.go ? `${it.use} với ${tn(S.tube)}` : null, onclick: it.go || null }, thumb(it), el('span', { style: 'min-width:0' }, el('b', {}, it.name), el('span', { class: 'chem-name' }, it.sub)), el('span', { class: 'chem-meta' }, el('span', { class: 'use-tag' }, 'Dùng được')))); continue; }
+        if (it.use) { kids.push(el(it.go ? 'button' : 'div', { class: 'chem-row tool-row', type: it.go ? 'button' : null, title: it.go ? `${it.use} với ${tn(S.tube)}` : null, onclick: it.go || null }, thumb(it), el('span', { style: 'min-width:0' }, el('b', {}, it.name), el('span', { class: 'chem-name' }, it.sub)), el('span', { class: 'chem-meta' }, el('span', { class: 'use-tag' }, it.badge || 'Dùng được')))); continue; }
         kids.push(el('div', { class: 'chem-row tool-row soon', title: 'Món này đã có trong kho nhưng bàn chưa làm thao tác cho nó' }, thumb(it), el('span', { style: 'min-width:0' }, el('b', {}, it.name), el('span', { class: 'chem-name' }, it.soon)), el('span', { class: 'chem-meta' }, el('span', { class: 'soon-tag' }, 'Chưa dùng được'))));
       } }
     kids.push(el('p', { class: 'tool-note' }, 'Bình ngoài giá: tối đa 4 cái trên bàn cùng lúc. Lắc, khuấy, đun, giấy quỳ, que đóm, nhiệt kế cũng có ở hàng Dụng cụ dưới bàn.'));
@@ -238,7 +273,7 @@ export function mountDS(c) {
     T.sound.replaceChild(icon(S.sound ? 'volume-2' : 'volume-x'), T.sound.firstChild); if (V2) T.sound.title = S.sound ? 'Âm thanh đang bật, bấm để tắt' : 'Âm thanh đang tắt, bấm để bật'; else T.sound.lastChild.textContent = S.sound ? 'Âm thanh: bật' : 'Âm thanh: tắt'; }
   // Dọn bàn là việc không lấy lại được: hỏi lại trong hộp thoại, ghi rõ phạm vi sẽ xoá.
   function openClear() { openLayer('Dọn bàn', el('p', {}, 'Dọn bàn sẽ cất hết lọ và cốc vào tủ, đổ bỏ mọi ống, cốc và xoá nhật ký trong sổ thí nghiệm. Không lấy lại được.'),
-    el('div', { style: 'display:flex;gap:8px;justify-content:flex-end' }, btn('secondary', null, 'Thôi', { onclick: () => layer.close() }), btn('primary danger', 'trash-2', 'Dọn cả bàn', { onclick: () => { layer.close(); A.clearAll(); toast('Đã dọn bàn.'); } }))); }
+    el('div', { style: 'display:flex;gap:8px;justify-content:flex-end' }, btn('secondary', null, 'Thôi', { onclick: () => layer.close() }), btn('primary danger', 'trash-2', 'Dọn cả bàn', { onclick: () => { layer.close(); if (A.clearAll() !== false) toast('Đã dọn bàn.'); } }))); }
 
   // ---------- đồ thị lượng sản phẩm theo thể tích trong ống (mẫu 19/11): nhỏ ở dải kết quả, to trong hộp Chi tiết ----------
   // Trục ngang là tổng thể tích trong ống (mL), không phải thời gian: đường đi lên khi còn đủ hai chất, nằm ngang khi một chất đã hết.
@@ -303,7 +338,7 @@ export function mountDS(c) {
       out.push(sec('Vì sao', (L.over ? `${label(L.over.other)} trong ống đã hết: thêm ${label(L.over.id)} nữa không tạo thêm sản phẩm. ` : '') + rx[0].r.reason)); }
     else if (ind) out.push(sec('Chất chỉ thị', cap(indSay(ind)), `pH trong ống khoảng ${fm(ind.pH, 1)}. Phenolphthalein hoá hồng khi pH từ khoảng 8,2 trở lên.`));
     else if (first) out.push(sec(first.r.observation || (first.kind === 'none' ? 'Không phản ứng' : 'Chưa có dữ liệu'), `${label(first.a)} + ${label(first.b)}`, first.r.reason));
-    if (N) out.push(sec(`Phép thử · ${N.tag}`, N.seen, N.why));
+    if (N) out.push(sec(N.tag === 'Lọc mẫu' ? N.tag : `Phép thử · ${N.tag}`, N.seen, N.why));
     openLayer(`Chi tiết · ${Tn(ti)}`, ...out); }
 
   setTab(S.cabTab); cabState();

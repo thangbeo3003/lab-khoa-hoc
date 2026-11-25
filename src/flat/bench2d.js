@@ -218,6 +218,37 @@ export function createFreeBench(host, { nameOf = (id) => id, theme = {} } = {}) 
       pourOut('#dcecf5', rinseML, true),
       { dur: 0.6, start() { tipOut(col, false); T.reset(); T.pose = P; }, fn: (k) => { P.x = lerp(at.x, up.x, k); P.y = lerp(at.y, up.y, k); P.rot = th * (1 - k); } },
       { dur: 0.35, fn: (k) => { P.y = lerp(up.y, TUBE_BY, k); } }], () => { T.pose = null; if (onDone) onDone(); }); }
+  function filter(from, to, volume, fluid, residue, onDone) {
+    stowDropper();
+    const source = tubes[from], receiver = tubes[to];
+    const a = source.pose = { x: source.x, y: source.by, rot: 0 };
+    const b = receiver.pose = { x: receiver.x, y: receiver.by, rot: 0 };
+    const x = BEAK.x + 1.5 * PPC, tip = mouthY(receiver) + 0.35 * PPC;
+    const rim = tip - 12 * PPC, angle = -1.62;
+    const mouth = { x: x + 1.35 * PPC, y: rim - 1.2 * PPC };
+    const end = { x: mouth.x - source.len * Math.sin(angle), y: mouth.y + source.len * Math.cos(angle) };
+    const station = FX.filter = { x, tip, rim, bottom: receiver.by, source, receiver, residue, fluid, alpha: 0, progress: 0, stream: false };
+    play([
+      { dur: 0.55, fn(k) { station.alpha = k; b.x = lerp(receiver.x, x, k); } },
+      { dur: 0.65, fn(k) { a.x = lerp(source.x, end.x, k); a.y = lerp(source.by, end.y, k); a.rot = angle * k; } },
+      { dur: 1.5, lin: true, fn(k) {
+        station.progress = k;
+        station.stream = k > 0.02 && k < 0.99;
+        source.spill = 1 - k;
+        receiver.setLook({ mL: volume * k, ...fluid });
+      } },
+      { dur: 0.75, start() { station.stream = false; } },
+      { dur: 0.65, start() { source.reset(); source.pose = a; }, fn(k) {
+        a.x = lerp(end.x, source.x, k); a.y = lerp(end.y, source.by, k); a.rot = angle * (1 - k);
+        b.x = lerp(x, receiver.x, k); station.alpha = 1 - k;
+      } },
+    ], () => {
+      source.pose = receiver.pose = null;
+      FX.filter = null;
+      onDone();
+    });
+  }
+
   // Nhiệt kế: thả vào ống, cột đỏ nhích lên theo mức toả nhiệt của phản ứng gần nhất (0 không đổi, 1 nhẹ, 2 mạnh). Không có số độ.
   function thermoTest(ti, level, onDone) { stowDropper(); const T = tubes[ti], top = mouthY(T) - 11.5 * PPC, bulb = floorY(T) - Math.max(0.5, T.lev(T.mL) * 0.5) * PPC, len = 13 * PPC, P = FX.thermo = { x: T.x, y: top, len, col: 0.3, a: 0 };
     play([{ dur: 0.3, fn: (k) => { P.a = k; } }, { dur: 0.7, fn: (k) => { P.y = lerp(top, bulb - len, k); } }, { dur: 1.0, fn: (k) => { P.col = 0.3 + level * 0.19 * k; } }, { dur: 0.9 }, { dur: 0.6, fn: (k) => { P.y = lerp(bulb - len, top, k); P.a = 1 - k; } }], () => { FX.thermo = null; if (onDone) onDone(); }); }
@@ -363,6 +394,53 @@ export function createFreeBench(host, { nameOf = (id) => id, theme = {} } = {}) 
     if (BGT_DIM > 0) { ctx.fillStyle = `rgba(28,32,48,${BGT_DIM})`; ctx.fillRect(vx - 4, vy - 4, vw + 8, HOR - vy + 8); }
     // Mặt bàn vẽ bằng mã: MỘT màu tối đồng nhất từ mép tường trở xuống (chủ dặn 19/11 "cho đồng màu tối hết đi"), không dải sáng tối, không vùng sáng bên trái.
     ctx.fillStyle = BGC.bench; ctx.fillRect(vx - 4, HOR, vw + 8, vy + vh - HOR + 8); }
+  function drawFilter(station) {
+    const { x, rim, tip, bottom, progress, residue, receiver, fluid, source } = station;
+    const drawAsset = (key, x, y, s, transparent = false) => {
+      ctx.save();
+      ctx.translate(x, y);
+      if (transparent) glass(key, META[key], s);
+      else solidImg(key, META[key], s);
+      ctx.restore();
+    };
+    ctx.save();
+    ctx.globalAlpha = station.alpha;
+    const stand = META.stand, ring = META.ring, funnel = META.funnel, paper = META.filterpaper;
+    const standScale = scaleOf(stand, 31), ringScale = 9.4 * PPC / ring.w;
+    const standRod = (stand.w * 0.88 - stand.cx) * standScale;
+    drawAsset('stand', x + 5.4 * PPC - standRod, bottom, standScale);
+    drawAsset('ring', x + (ring.cx - ring.w * 0.32) * ringScale, rim + 1.7 * PPC, ringScale);
+    const paperScale = 5.55 * PPC / paper.w;
+    drawAsset('filterpaper', x, rim + 0.48 * PPC + (paper.bottom - paper.top) * paperScale, paperScale);
+    drawAsset('funnel', x, tip, scaleOf(funnel, 12), true);
+    if (progress > 0.03) {
+      for (const [i, solid] of residue.entries()) {
+        ctx.fillStyle = css(PPT_HEX[solid.color] ?? 0xa6a2a0);
+        ctx.beginPath();
+        ctx.ellipse(x + (i % 3 - 1) * 0.55 * PPC, rim + (1.95 + i % 2 * 0.32) * PPC,
+          (0.34 + 0.42 * progress) * PPC, (0.12 + 0.15 * progress) * PPC, 0.12, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+    if (station.stream) {
+      const mouth = mouthOf(source.pose, source.len);
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 0.12 * PPC;
+      ctx.strokeStyle = rgba(source.col, 0.83, 0.96);
+      ctx.beginPath();
+      ctx.moveTo(mouth.x, mouth.y);
+      ctx.quadraticCurveTo(mouth.x, rim, x + 0.5 * PPC, rim + 1.6 * PPC);
+      ctx.stroke();
+      ctx.strokeStyle = rgba(fluid.hex, 0.85, 0.95);
+      const depth = receiver.m.floor * receiver.s + receiver.lev(receiver.mL) * PPC;
+      ctx.beginPath();
+      ctx.moveTo(x, tip);
+      ctx.lineTo(x, receiver.by - depth);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawNow() {
     const LT = lookK > 0 && !tubes[active].pose && tubes[active].on ? tubes[active] : null; if (LT) LT.pose = { x: LT.x, y: LT.by - (LT.kind === 'tube' ? ease(lookK) * LIFT : 0), rot: 0 }; // cốc không nhấc: hai bên cốc đã là nền trống
     const sc = sc0 * Z.z; VIEW = [sc, 0, 0, sc, cv.width / 2 - Z.x * sc, cv.height / 2 - Z.y * sc];
@@ -375,7 +453,7 @@ export function createFreeBench(host, { nameOf = (id) => id, theme = {} } = {}) 
     }
     const rh = MR.h * sR, rx0 = rX(0), ry0 = rY(0), rest = tubes.filter((T) => T.on && !T.pose && T.kind === 'tube'), moving = tubes.filter((T) => T.on && T.pose), cups = tubes.filter((T) => T.on && !T.pose && T.kind !== 'tube');
     shadow(RXC, BASE + 0.15 * PPC, rw * 0.56, 1.0 * PPC, 0.5);
-    if (MK && IM.beaker && FX.lamp < 0.98) { ctx.save(); ctx.globalAlpha = 1 - FX.lamp; shadow(BEAK.x, BEAK.y + 0.1 * PPC, 4.4 * PPC, 0.7 * PPC, 0.4); ctx.translate(BEAK.x, BEAK.y); if (waste.mL > 0.5) { const top = -(MK.floor * sK + levWaste(waste.mL) * PPC), hw = halfAt(MK, sK, top); liquid(MK, sK, top, hw, waste.col, 0.5); surface(top, hw, waste.col, 0.5); } glass('beaker', MK, sK); ctx.restore(); }
+    if (MK && IM.beaker && FX.lamp < 0.98 && !FX.filter) { ctx.save(); ctx.globalAlpha = 1 - FX.lamp; shadow(BEAK.x, BEAK.y + 0.1 * PPC, 4.4 * PPC, 0.7 * PPC, 0.4); ctx.translate(BEAK.x, BEAK.y); if (waste.mL > 0.5) { const top = -(MK.floor * sK + levWaste(waste.mL) * PPC), hw = halfAt(MK, sK, top); liquid(MK, sK, top, hw, waste.col, 0.5); surface(top, hw, waste.col, 0.5); } glass('beaker', MK, sK); ctx.restore(); }
     ctx.drawImage(IM.rack, rx0, ry0, rw, rh);
     for (const T of rest) drawTube(T);
     const fy = MR.frontTop, fh = MR.plateBottom - MR.frontTop; ctx.drawImage(IM.rack, 0, fy, MR.w, fh, rx0, rY(fy), rw, fh * sR); // dải mặt trước của tấm trên vẽ đè lại: ống trông như cắm xuyên qua lỗ
@@ -385,6 +463,7 @@ export function createFreeBench(host, { nameOf = (id) => id, theme = {} } = {}) 
     const bs = Object.values(bottles); for (const b of bs) if (!b.busy) drawBottle(b);
     if (FX.lamp > 0.01 && ML && IM.lamp) { ctx.save(); ctx.globalAlpha = FX.lamp; shadow(SPOT.x, SPOT.y + 0.1 * PPC, 4.6 * PPC, 0.7 * PPC, 0.42); ctx.translate(SPOT.x, SPOT.y); glass('lamp', ML, sL); ctx.restore(); flame(SPOT.x, SPOT.y - 8.2 * PPC, FX.flame * FX.lamp); }
     if (FX.tripod > 0.01 && MTR && IM.tripod) { ctx.save(); ctx.globalAlpha = FX.tripod; ctx.translate(SPOT.x, SPOT.y); ctx.drawImage(IM.tripod, -MTR.cx * sTr, -MTR.bottom * sTr, MTR.w * sTr, MTR.h * sTr); ctx.restore(); } // kiềng vẽ sau ngọn lửa: lưới nằm trên lửa
+    if (FX.filter && !ghost) drawFilter(FX.filter);
     for (const T of moving) { drawTube(T); if (FX.holder && FX.holder.T === T && MH && IM.holder) { const P = T.pose, g = 0.78 * TL, gx = P.x + g * Math.sin(P.rot), gy = P.y - g * Math.cos(P.rot); ctx.save(); ctx.globalAlpha = FX.holder.a; ctx.translate(gx, gy); ctx.rotate(P.rot * 0.35); ctx.drawImage(IM.holder, -MH.jaw[0] * sH, -MH.jaw[1] * sH, MH.w * sH, MH.h * sH); ctx.restore(); } }
     for (const b of bs) if (b.busy) drawBottle(b);
     if (FX.rod && MRD && IM.rod) { const r = FX.rod; ctx.save(); ctx.globalAlpha = clamp(r.a, 0, 1); ctx.translate(r.x, r.y); ctx.rotate(r.rot); glass('rod', MRD, sRod); ctx.restore(); }
@@ -407,7 +486,7 @@ export function createFreeBench(host, { nameOf = (id) => id, theme = {} } = {}) 
     const sp = FX.splint; if (sp) { ctx.save(); ctx.globalAlpha = clamp(sp.a, 0, 1); ctx.translate(sp.x, sp.y); ctx.save(); ctx.rotate(-0.72); const MSP = META.splint; if (MSP && IM.splint) { const ss = (15 * PPC) / (MSP.right - MSP.left); ctx.drawImage(IM.splint, -MSP.left * ss, -MSP.midY * ss, MSP.w * ss, MSP.h * ss); } else { ctx.fillStyle = '#c9a26b'; ctx.fillRect(0, -0.22 * PPC, 15 * PPC, 0.44 * PPC); ctx.fillStyle = '#2a1c10'; ctx.fillRect(0, -0.22 * PPC, 1.3 * PPC, 0.44 * PPC); } ctx.restore(); /* ảnh que đóm gỗ thông, đầu cháy ở gốc toạ độ (chỗ ngọn lửa) */ if (sp.smoke > 0) { ctx.strokeStyle = `rgba(200,205,212,${0.5 * sp.smoke})`; ctx.lineWidth = 0.18 * PPC; ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(0.6 * PPC, -1 * PPC, -0.6 * PPC, -2 * PPC, 0.3 * PPC, -3.2 * PPC * sp.smoke); ctx.stroke(); } ctx.restore(); ctx.save(); ctx.globalAlpha = clamp(sp.a, 0, 1); flame(sp.x, sp.y, 1.05 * sp.flame); ctx.restore(); }
     if (FX.pop > 0.02) { const T = tubes[active], MOUTH_Y = mouthY(T); ctx.save(); ctx.globalCompositeOperation = 'screen'; const g = ctx.createRadialGradient(T.x, MOUTH_Y, 0, T.x, MOUTH_Y, 3 * PPC); g.addColorStop(0, `rgba(255,240,200,${FX.pop})`); g.addColorStop(1, 'rgba(255,200,120,0)'); ctx.fillStyle = g; ctx.fillRect(T.x - 3 * PPC, MOUTH_Y - 3 * PPC, 6 * PPC, 6 * PPC); ctx.restore(); }
     if (flash.text && !seq && tubes[flash.i].on) pill(tubes[flash.i].x, tubes[flash.i].tagY + TS * 3.15, flash.text, flash.calm ? 'rgba(16,26,42,0.85)' : 'rgba(10,122,75,0.95)', '#fff', 0.7 * PPC);
-    const sb = selId && bottles[selId]; pill(BEAK.x, BEAK.y + 1.3 * PPC, FX.lamp > 0.5 ? 'Đèn cồn' : 'Cốc thải', 'rgba(16,26,42,0.78)', '#eef3f9', 0.66 * PPC); // cốc hứng chất đổ bỏ và nước tráng ống; lúc đun thì đèn cồn hiện ở chỗ này
+    const sb = selId && bottles[selId]; pill(FX.filter?.x ?? BEAK.x, BEAK.y + 1.3 * PPC, FX.filter ? 'Bộ lọc' : FX.lamp > 0.5 ? 'Đèn cồn' : 'Cốc thải', 'rgba(16,26,42,0.78)', '#eef3f9', 0.66 * PPC); // cốc hứng chất đổ bỏ và nước tráng ống; lúc đun thì đèn cồn hiện ở chỗ này
     if (LT) { drawCallouts(LT); LT.pose = null; }
     awayBox = null; if (sb && !sb.busy && selText && sb.stopOn > 0.95) { pill(sb.x, sb.y + 1.3 * PPC, selText, TH.chip, '#fff', 0.66 * PPC); const s = 0.58 * PPC, y = sb.y + 2.6 * PPC, txt = '✕ Cất vào tủ'; ctx.save(); ctx.font = `700 ${s}px ${FONT}`; const w = ctx.measureText(txt).width + s * 1.1; ctx.restore(); pill(sb.x, y, txt, 'rgba(16,26,42,0.86)', '#f2f5f9', s); awayBox = [sb.x - w / 2, y - s * 0.85, w, s * 1.7, sb.id]; }
   }
@@ -455,6 +534,7 @@ export function createFreeBench(host, { nameOf = (id) => id, theme = {} } = {}) 
     place(i) { const T = tubes[i]; if (!T || T.on) return false; const used = new Set(tubes.filter((v) => v.on && v.kind !== 'tube').map((v) => v.slot)), k = VSLOT.findIndex((x, j) => !used.has(j)); if (k < 0) return false; T.reset(); T.slot = k; T.x = VSLOT[k]; T.on = true; T.pop = 0; return true; },
     thumb, slotsFree: () => VSLOT.length - tubes.filter((v) => v.on && v.kind !== 'tube').length, assetOf: (k) => (IM[k] ? IM[k].src : null),
     stow(i) { const T = tubes[i]; if (!T || !T.on || T.kind === 'tube' || seq || T.mLto > 0.001) return false; T.on = false; T.reset(); T.tag = ''; if (active === i) active = 0; return true; }, setFlash(i, text, calm) { if (text) { flash.i = i; flash.text = text; flash.calm = !!calm; flash.hold = 2.8; flash.clear = false; } else flash.clear = true; },
+    filter: ['funnel', 'filterpaper', 'stand', 'ring'].every((key) => IM[key]) ? filter : null,
     pour, stopPour, arm, dropOne, disarm, stir, armed: () => (FX.dropper && FX.dropper.armed ? { id: FX.dropper.id, ti: FX.dropper.ti } : null), addSolid, shake, discard, litmusTest, splintTest, heatTube, thermoTest,
     busy: () => !!seq, onPick(cb) { pickCb = cb; }, onHover(cb) { hoverCb = cb; }, hovered: () => hover,
     shot: async (name) => { draw(); const res = await fetch('/__shot?name=' + name, { method: 'POST', body: await (await fetch(cv.toDataURL('image/jpeg', 0.93))).blob() }); return `${name}: ${res.status} ${cv.width}x${cv.height}`; } };

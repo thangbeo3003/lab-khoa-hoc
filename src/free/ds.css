@@ -309,3 +309,9 @@ html[data-ui="ds"] body { background:var(--canvas); color:var(--text); font:400 
   .lb.ds:not(.v2) .dose-bar .dose-field.reagent { flex:1 1 56px; max-width:clamp(120px, 16vw, 220px); }
   .lb.ds:not(.v2) .dose-bar .primary { margin-left:auto; }
 }
+
+/* Hộp chọn mẫu và bình hứng của bộ lọc. */
+.ds .filter-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.ds .filter-fields label { display:grid; gap:4px; font-weight:650; }
+.ds .filter-fields select { min-width:0; min-height:40px; padding:6px 9px; border:1px solid var(--control-border); border-radius:8px; background:#fff; color:var(--text); font:inherit; }
+.ds .filter-actions { display:flex; justify-content:flex-end; }
