@@ -10,7 +10,7 @@ export const CATIONS = {
 export const ANIONS = {
   Cl: { f: 'Cl', q: 1 }, NO3: { f: 'NO3', q: 1, poly: true }, SO4: { f: 'SO4', q: 2, poly: true }, CO3: { f: 'CO3', q: 2, poly: true },
   HCO3: { f: 'HCO3', q: 1, poly: true }, OH: { f: 'OH', q: 1, poly: true }, I: { f: 'I', q: 1 }, CH3COO: { f: 'CH3COO', q: 1, poly: true },
-  MnO4: { f: 'MnO4', q: 1, poly: true }, SCN: { f: 'SCN', q: 1, poly: true },
+  MnO4: { f: 'MnO4', q: 1, poly: true }, SCN: { f: 'SCN', q: 1, poly: true }, Br: { f: 'Br', q: 1 },
 };
 
 // group: acid | base | salt | metal | solid | indicator | other. ions: [cation, số cation, anion, số anion].
@@ -22,6 +22,18 @@ const C = (id, f, name, group, extra) => ({ id, f, name, group, ...extra });
 export const ALKALI_SAFETY = {
   water: 'An toàn: kim loại kiềm phản ứng mãnh liệt với nước, toả nhiều nhiệt, khí hydrogen có thể bốc cháy hoặc nổ. Ngoài thật chỉ giáo viên làm, với một mẩu rất nhỏ và có tấm chắn.',
   acid: 'An toàn: kim loại kiềm phản ứng rất mãnh liệt với dung dịch acid, có thể gây nổ. Ngoài thật không làm thí nghiệm này; ở đây chỉ là mô phỏng.',
+};
+// ---------- nhóm halogen (25/11, bài Hoá 10 · Nhóm halogen, CHEM10-05) ----------
+// Nguồn: Chemguide, "Halogens as oxidising agents", https://www.chemguide.co.uk/inorganic/group7/halogensasoas.html (tự tải và dò 25/11),
+// trùng bảng dữ kiện D1–D6 của app/src/lessons/h10_nhom_halogen/facts.md.
+// Dãy tính oxi hoá của halogen trong dung dịch, mạnh → yếu (D6). Halogen đứng trước lấy electron của ion halide đứng sau: X₂ + 2Y⁻ → 2X⁻ + Y₂.
+// F₂ không đưa vào: trong nước F₂ oxi hoá cả nước (D6).
+export const HALOGEN_SERIES = ['Cl', 'Br', 'I'];
+// I₂ chỉ tan được trong dung dịch còn ion iodide (tạo I₃⁻ màu đỏ); hết iodide thì I₂ tách ra thành chất rắn xám đen (nguồn như trên, D2, D3).
+export const IODINE_SOLID = { color: 'xám đen', form: 'tinh thể' };
+// Câu cảnh báo an toàn theo loại nguy hiểm của chất (trường hazard). Không ghi con số. Lời theo mục 3 (An toàn) của facts.md.
+export const SAFETY = {
+  halogen: 'An toàn: chlorine và bromine rất độc, gây bỏng. Ngoài đời chỉ làm trong tủ hút; ở đây chỉ mô phỏng hiện tượng.',
 };
 export const CHEMS = [
   C('HCl', 'HCl', 'Hydrochloric acid', 'acid', { conc: 1.0, ions: ['H', 1, 'Cl', 1], strong: true, ph: 0, color: 'không màu' }),
@@ -45,6 +57,8 @@ export const CHEMS = [
   C('ZnSO4', 'ZnSO4', 'Zinc sulfate', 'salt', { conc: 0.1, ions: ['Zn', 1, 'SO4', 1], ph: 5, color: 'không màu' }),
   C('MgCl2', 'MgCl2', 'Magnesium chloride', 'salt', { conc: 0.5, ions: ['Mg', 1, 'Cl', 2], ph: 6.5, color: 'không màu' }),
   C('KI', 'KI', 'Potassium iodide', 'salt', { conc: 0.1, ions: ['K', 1, 'I', 1], ph: 7, color: 'không màu' }),
+  C('NaBr', 'NaBr', 'Sodium bromide', 'salt', { conc: 0.1, ions: ['Na', 1, 'Br', 1], ph: 7, color: 'không màu' }),
+  C('KBr', 'KBr', 'Potassium bromide', 'salt', { conc: 0.1, ions: ['K', 1, 'Br', 1], ph: 7, color: 'không màu' }),
   C('PbNO32', 'Pb(NO3)2', 'Lead(II) nitrate', 'salt', { conc: 0.1, ions: ['Pb', 1, 'NO3', 2], ph: 4, color: 'không màu' }),
   C('NH4Cl', 'NH4Cl', 'Ammonium chloride', 'salt', { conc: 0.5, ions: ['NH4', 1, 'Cl', 1], ph: 4.8, color: 'không màu' }),
   C('KMnO4', 'KMnO4', 'Potassium permanganate (thuốc tím)', 'salt', { conc: 0.01, ions: ['K', 1, 'MnO4', 1], ph: 7, color: 'tím', hex: '#8d3a9c', special: true }),
@@ -62,8 +76,16 @@ export const CHEMS = [
   C('CaO', 'CaO', 'Calcium oxide (vôi sống)', 'solid', { color: 'trắng' }),
   C('H2O', 'H2O', 'Nước cất', 'other', { ph: 7, color: 'không màu' }),
   C('H2O2', 'H2O2', 'Hydrogen peroxide 3%', 'other', { conc: 0.9, color: 'không màu' }),
+  // Nước halogen: halogen = nguyên tố trong HALOGEN_SERIES. conc: số MINH HOẠ để sổ ống tính lượng, CHƯA có nguồn (không phải dữ kiện, không phải độ tan).
+  // Màu nước chlorine (D9): CHƯA có nguồn đọc trực tiếp. Màu cam của bromine và đỏ nâu của iodine trong dung dịch iodide: nguồn Chemguide như trên.
+  // carry: chất đi kèm trong cùng lọ (mol/L, minh hoạ): nước iodine là iodine tan trong dung dịch KI.
+  C('Cl2', 'Cl2', 'Nước chlorine', 'other', { conc: 0.05, halogen: 'Cl', hazard: 'halogen', color: 'vàng lục rất nhạt', hex: '#dfeca8' }),
+  C('Br2', 'Br2', 'Nước bromine', 'other', { conc: 0.05, halogen: 'Br', hazard: 'halogen', color: 'cam', hex: '#ec8a2b' }),
+  C('I2', 'I2', 'Nước iodine (iodine tan trong dung dịch KI)', 'other', { conc: 0.01, halogen: 'I', carry: { KI: 0.1 }, color: 'đỏ nâu', hex: '#9a3412' }),
   C('quy', 'Quỳ tím', 'Quỳ tím', 'indicator', { color: 'tím' }),
   C('pp', 'Phenolphthalein', 'Phenolphthalein', 'indicator', { color: 'không màu' }),
+  // Thuốc thử nhận biết một chất (senses), không theo pH. Hồ tinh bột gặp iodine hoá xanh đen (D8): CHƯA có nguồn đọc trực tiếp, kiến thức phổ thông.
+  C('tinhbot', 'Hồ tinh bột', 'Hồ tinh bột', 'indicator', { color: 'không màu', senses: 'I2', on: 'xanh đen', onHex: '#1e2550' }),
 ];
 export const BY_ID = Object.fromEntries(CHEMS.map((c) => [c.id, c]));
 
@@ -79,7 +101,8 @@ export const INSOLUBLE = {
   'Mg|OH': { color: 'trắng', form: 'keo' }, 'Zn|OH': { color: 'trắng', form: 'keo', amph: 2 }, 'Cu|OH': { color: 'xanh lam', form: 'keo' },
   'Fe2|OH': { color: 'trắng xanh', form: 'keo', note: 'Để ngoài không khí, kết tủa chuyển dần sang nâu đỏ.' }, 'Fe3|OH': { color: 'nâu đỏ', form: 'keo' },
   'Al|OH': { color: 'trắng', form: 'keo', amph: 1 }, 'Pb|OH': { color: 'trắng', form: 'keo', note: 'Kết tủa này tan được trong kiềm dư.' },
-  'Pb|I': { color: 'vàng', form: 'tinh thể' }, 'Pb|SO4': { color: 'trắng', form: 'mịn' }, 'Pb|CO3': { color: 'trắng', form: 'mịn' },
+  'Pb|I': { color: 'vàng', form: 'tinh thể' }, 'Ag|Br': { color: 'kem rất nhạt', form: 'vón cục' }, // AgBr: Chemguide "Testing for halide ions" ("very pale cream precipitate", đọc 25/11)
+  'Pb|SO4': { color: 'trắng', form: 'mịn' }, 'Pb|CO3': { color: 'trắng', form: 'mịn' },
 };
 // Chất ít tan: chỉ kết tủa khi tích nồng độ ion vượt tích số tan. a, b = số cation, số anion trong công thức.
 export const KSP = {
@@ -87,7 +110,7 @@ export const KSP = {
   'Ca|OH': { ksp: 5.0e-6, a: 1, b: 2, color: 'trắng' }, 'Pb|Cl': { ksp: 1.7e-5, a: 1, b: 2, color: 'trắng' },
 };
 // Cặp ion mà luật đơn giản cho kết quả sai hoặc phức tạp hơn mức phổ thông: trả "chưa có dữ liệu".
-export const NA_PAIRS = new Set(['Cu|CO3', 'Zn|CO3', 'Mg|CO3', 'Fe2|CO3', 'Cu|HCO3', 'Zn|HCO3', 'Fe2|HCO3', 'Pb|HCO3', 'Ag|HCO3', 'Cu|SCN', 'Pb|SCN', 'Ag|CH3COO', 'Cu|I', 'Fe3|I', 'Fe3|SCN', 'Fe3|CO3', 'Fe3|HCO3', 'Al|CO3', 'Al|HCO3', 'Ag|OH', 'NH4|CO3']);
+export const NA_PAIRS = new Set(['Cu|CO3', 'Zn|CO3', 'Mg|CO3', 'Fe2|CO3', 'Cu|HCO3', 'Zn|HCO3', 'Fe2|HCO3', 'Pb|HCO3', 'Ag|HCO3', 'Cu|SCN', 'Pb|SCN', 'Ag|CH3COO', 'Cu|I', 'Fe3|I', 'Fe3|SCN', 'Fe3|CO3', 'Fe3|HCO3', 'Al|CO3', 'Al|HCO3', 'Ag|OH', 'NH4|CO3', 'Pb|Br']); // Pb|Br: PbBr₂ ít tan, chưa có tích số tan có nguồn
 
 // ---------- kết tủa đã tạo gặp chất khác (S1, 21/11). Mỗi dòng có nguồn đã đọc, ghi ở L2_LOGIC_CONG_THUC.md mục 5.2 ----------
 // Kết tủa tan trong acid: 'cation|anion' → { weak: true nếu nguồn nêu rõ cả acid yếu (acetic) }. Chỉ áp dụng khi muối tạo ra tan hẳn (máy tự kiểm).

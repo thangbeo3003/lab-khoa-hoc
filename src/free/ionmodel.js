@@ -5,7 +5,7 @@ import { compound } from '../chem/engine.js';
 import { pretty, prettyIon } from '../chem/formula.js';
 
 // Màu nguyên tử theo quy ước mô hình phân tử (H trắng, O đỏ, N lam, S vàng, C xám, Cl lục); kim loại mỗi thứ một màu dễ phân biệt.
-export const ATOM = { H: ['#f4f6f9', 0.3], O: ['#e5484d', 0.5], N: ['#3d6fe0', 0.5], C: ['#555b66', 0.5], S: ['#f2c744', 0.62], Cl: ['#3fbf5f', 0.62], I: ['#8a4fc7', 0.74], Na: ['#b294f0', 0.6], K: ['#8f5fd6', 0.7], Ca: ['#e9cf8f', 0.64], Ba: ['#ec8fb4', 0.74], Mg: ['#6fd0c4', 0.56], Al: ['#c6ccd6', 0.54], Zn: ['#8fa3b8', 0.56], Fe: ['#e08a3c', 0.56], Cu: ['#2f8fe6', 0.56], Ag: ['#e3e8ef', 0.64], Pb: ['#737a86', 0.7], Mn: ['#a455bd', 0.56] };
+export const ATOM = { H: ['#f4f6f9', 0.3], O: ['#e5484d', 0.5], N: ['#3d6fe0', 0.5], C: ['#555b66', 0.5], S: ['#f2c744', 0.62], Cl: ['#3fbf5f', 0.62], I: ['#8a4fc7', 0.74], Br: ['#a83232', 0.68], Na: ['#b294f0', 0.6], K: ['#8f5fd6', 0.7], Ca: ['#e9cf8f', 0.64], Ba: ['#ec8fb4', 0.74], Mg: ['#6fd0c4', 0.56], Al: ['#c6ccd6', 0.54], Zn: ['#8fa3b8', 0.56], Fe: ['#e08a3c', 0.56], Cu: ['#2f8fe6', 0.56], Ag: ['#e3e8ef', 0.64], Pb: ['#737a86', 0.7], Mn: ['#a455bd', 0.56] };
 // Bán kính ion Shannon, số phối trí 6, đơn vị pm (LibreTexts, Saito, bảng 2.2). Dùng để ion đơn nguyên tử có cỡ đúng tương quan với nhau (Cl⁻ to gần gấp đôi Na⁺).
 // Cu²⁺, Ag⁺, Zn²⁺, Fe²⁺, Pb²⁺, Mn²⁺ lấy từ bảng bán kính hiệu dụng Shannon trên Wikipedia "Ionic radius" (phối trí 6). H⁺ và ion nhiều nguyên tử chưa có số đã đối chiếu.
 export const ION_PM = { Na: 102, K: 138, Mg: 72, Ca: 100, Ba: 135, Al: 54, Cl: 181, I: 220, Cu: 73, Ag: 115, Zn: 74, Fe: 78, Pb: 119, Mn: 83 }; // Fe lấy theo Fe²⁺ spin cao (Fe³⁺ là 64,5, vẽ chung một cỡ)

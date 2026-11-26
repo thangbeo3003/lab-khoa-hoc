@@ -8,7 +8,7 @@ import { pretty } from '../chem/formula.js';
 import { mountProcess3D } from './process3d.js';
 import { buildModel, population, entering } from './ionmodel.js';
 import { mountLens } from './lens3d.js';
-const { createFreeBench, PPT_HEX } = await import(document.documentElement.dataset.bench === '2d' ? '../flat/bench2d.js' : './bench.js'); // cùng một phần điều khiển cho bàn 2D và bàn 3D
+const { createFreeBench, PPT_HEX, FLAT_CONC } = await import(document.documentElement.dataset.bench === '2d' ? '../flat/bench2d.js' : './bench.js'); // cùng một phần điều khiển cho bàn 2D và bàn 3D
 
 // Tủ hoá chất: cả kho trừ giấy quỳ (giấy quỳ là một dụng cụ thử trong khay Dụng cụ).
 const CAB = CHEMS.filter((c) => c.id !== 'quy').map((c) => c.id);
@@ -23,8 +23,11 @@ const num = (v) => parseFloat(String(v).replace(',', '.'));
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const low = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s);
 const shortName = (id) => BY_ID[id].name.replace(/\s+\([^)]*\)$/, '');
-const concText = (id) => { const c = BY_ID[id]; return id === 'H2O' ? 'nước cất' : id === 'H2O2' ? '3%' : c.conc ? `${String(c.conc).replace('.', ',')} M` : isSolid(id) ? 'chất rắn' : 'chỉ thị'; };
-const chemName = (id) => `${label(id)}${BY_ID[id].conc && id !== 'H2O' ? ' ' + concText(id) : ''}`;
+// Nồng độ chỉ là số minh hoạ, chưa có nguồn thì KHÔNG hiện ở bất kỳ chỗ nào (nhãn lọ, tủ, thanh thao tác, sổ); kho vẫn dùng số đó để tính (26/11, HUB giao).
+// Cờ dữ liệu chung: concSource === false là ẩn; concSource === true là hiện. Chất khai halogen (nước chlorine, bromine, iodine) chưa có cờ thì mặc định ẩn.
+const concHidden = (id) => { const c = BY_ID[id]; return !!c && (c.concSource === false || (!!c.halogen && c.concSource !== true)); };
+const concText = (id) => { const c = BY_ID[id]; return id === 'H2O' ? 'nước cất' : id === 'H2O2' ? '3%' : c.conc && concHidden(id) ? 'dung dịch' : c.conc ? `${String(c.conc).replace('.', ',')} M` : isSolid(id) ? 'chất rắn' : 'chỉ thị'; };
+const chemName = (id) => `${label(id)}${BY_ID[id].conc && id !== 'H2O' && !concHidden(id) ? ' ' + concText(id) : ''}`;
 const listLabel = (id) => (id === 'pp' ? 'PP' : label(id));
 const pieceUnit = (id) => (PIECE[id] || { unit: 'mẩu' }).unit;
 // Lượng chất (mmol) của MỘT mẩu chất rắn: hỏi thẳng sổ ống (thả thử một mẩu vào ống trống) để khung hạt luôn dùng đúng số của tubechem.js, kể cả chất không có trong PIECE (Na, CaO, CuO, MnO₂… = 0,2 g). Trước 21/11 chỗ này tự lấy 0,3 g nên lệch với sổ.
@@ -33,6 +36,7 @@ const GAS_RATE = { 'rất mạnh': 1, 'mạnh': 0.85, 'vừa': 0.6, 'chậm': 0.
 const FORM_PUFF = { 'keo': 1.7, 'bông': 1.5, 'vón cục': 1.1 };
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* không lưu được thì thôi */ } } };
 
+if (FLAT_CONC) FLAT_CONC.text = (id) => concText(id); // nhãn lọ trên bàn 2D viết đúng chữ nồng độ như tủ (ẩn số minh hoạ)
 const bench = createFreeBench($('stage'), { nameOf: chemName, theme: document.documentElement.dataset.ui === 'ds' ? { tagOn: '#eeecff', tagOnInk: '#4d3fdc', tagOnLine: '#6254f4', accent: '98,84,244', chip: 'rgba(98,84,244,0.96)' } : {} });
 // Bình trên bàn (đợt 1, 19/11): 5 ống A–E trong giá (luôn có) + cốc thuỷ tinh 100 mL lấy từ tủ Dụng cụ. Mỗi bình có tên và sức chứa riêng (bench.tubes[i].cap).
 const TUBES = bench.tubes.map((t) => t.i), LET = 'ABCDE';
@@ -538,7 +542,7 @@ function renderBook() {
   }
   if (N) fx.push(el('div', { class: fx.length ? 'fr-test' : '' }, el('span', { class: 'fr-tag k-test' }, N.tag), el('b', {}, N.seen), el('p', { class: 'fr-note' }, N.why)));
   put(host, el('h2', {}, 'Sổ thí nghiệm', el('button', { 'aria-label': 'Đóng sổ', onclick: () => { S.book = false; renderBook(); } }, '×')),
-    el('div', { class: 'bk-sec' }, el('h3', {}, `Trong ${tn(S.tube)}`, el('small', {}, `${fm(t.vol, 2)} mL`)), !list.length ? el('p', { class: 'fr-empty' }, `${Tn(S.tube)} đang trống.`) : el('div', { class: 'fr-in' }, list.map((c) => el('div', {}, el('i', { style: `background:${c.hex}` }), el('span', {}, el('b', {}, c.label), c.conc ? ` ${c.conc}` : '', c.status ? el('small', {}, c.status) : null), el('em', {}, c.amount)))), t.ppt.length ? el('p', { class: 'fr-note' }, 'Kết tủa: ', t.ppt.map((p) => `${pretty(p.f)} ${p.color} (${fm(p.mol * 1000, 2)} mmol)`).join(', '), '.') : null),
+    el('div', { class: 'bk-sec' }, el('h3', {}, `Trong ${tn(S.tube)}`, el('small', {}, `${fm(t.vol, 2)} mL`)), !list.length ? el('p', { class: 'fr-empty' }, `${Tn(S.tube)} đang trống.`) : el('div', { class: 'fr-in' }, list.map((c) => el('div', {}, el('i', { style: `background:${c.hex}` }), el('span', {}, el('b', {}, c.label), c.conc && !concHidden(c.id) ? ` ${c.conc}` : '', c.status ? el('small', {}, c.status) : null), el('em', {}, c.amount)))), t.ppt.length ? el('p', { class: 'fr-note' }, 'Kết tủa: ', t.ppt.map((p) => `${pretty(p.f)} ${p.color} (${fm(p.mol * 1000, 2)} mmol)`).join(', '), '.') : null),
     el('div', { class: 'bk-sec' }, el('h3', {}, 'Hiện tượng'), fx.length ? fx : el('p', { class: 'fr-empty' }, 'Chưa có gì. Cho hai chất vào cùng một ống để xem chúng có phản ứng không.')),
     el('div', { class: 'bk-sec' }, el('h3', {}, 'Nhật ký', el('small', {}, 'tự ghi')), !S.log.length ? el('p', { class: 'fr-empty' }, 'Mỗi lần thêm chất hay làm một phép thử, sổ ghi lại: làm gì, bao nhiêu, thấy gì, phương trình.') :
       el('div', { class: 'fr-log' }, S.log.map((e, k) => { const n = S.log.length - k;

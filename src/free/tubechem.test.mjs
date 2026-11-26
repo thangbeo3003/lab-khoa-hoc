@@ -1,5 +1,7 @@
 import { newTube, add, look, pH, indicatorLook, contents, pptTotal, DROP_ML, litmus, heat, SPLINT, beginPour, endPour, separateFiltrate } from './tubechem.js';
-import { ALKALI_SAFETY } from '../chem/data.js';
+import { ALKALI_SAFETY, SAFETY } from '../chem/data.js';
+import { parse } from '../chem/formula.js';
+import { BY_ID } from '../chem/engine.js';
 let fail = 0; const ok = (c, m) => { if (!c) { fail++; console.log('  SAI:', m); } };
 const near = (a, b, e = 1e-9) => Math.abs(a - b) < e;
 // 1) CuSO4 2 mL rồi nhỏ NaOH từng giọt: kết tủa tăng dần, tới khi Cu2+ hết thì NaOH dư.
@@ -111,7 +113,7 @@ for (const order of [['Mg', 'H2O'], ['H2O', 'Mg']]) {
   const ev = add(c, 'Fe', { piece: true }).events; ok(ev[0].r.equation === 'Fe + CuCl₂ → FeCl₂ + Cu' && it(c, 'CuCl2') === 0 && it(c, 'FeCl2') === 1.5 && c.items.Fe.coat === 'đỏ' && look(c).hex === '#cfe6cf', 'đinh sắt đẩy đồng khỏi CuCl2: dung dịch chuyển lục nhạt, đồng bám đỏ');
   const f = newTube(); add(f, 'FeCl3', { mL: 2 }); const ef = add(f, 'Zn', { piece: true }).events; ok(rx(ef).length === 2 && ef[1].r.equation === 'Zn + FeCl₂ → ZnCl₂ + Fe' && it(f, 'FeCl2') === 0 && it(f, 'ZnCl2') === 0.3, 'Zn dư + FeCl3: Fe3+ về Fe2+ rồi Fe2+ bị đẩy ra thành sắt');
   const g = newTube(); add(g, 'HCl', { mL: 2 }); add(g, 'Fe', { piece: true }); const fe = g.items.Fe.mol, eg = add(g, 'AgNO3', { mL: 2 }).events; ok(eg[0].r.equation === '2AgNO₃ + FeCl₂ → 2AgCl↓ + Fe(NO₃)₂' && ppt(g, 'AgCl') === 0.2 && near(g.items.Fe.mol, fe), 'AgNO3 gặp Cl- trong dung dịch trước khi gặp đinh sắt: ' + eg[0]?.r?.equation);
-  const i = newTube(); add(i, 'FeCl3', { mL: 2 }); add(i, 'KI', { mL: 2 }); ok(i.tints.length === 1, 'FeCl3 + KI: màu nâu của I2 (sổ không theo dõi I2) vẫn ghi thành lớp màu'); }
+  const i = newTube(); add(i, 'FeCl3', { mL: 2 }); add(i, 'KI', { mL: 2 }); ok(i.tints.length === 0 && i.ppt.some((p) => p.f === 'I2' && p.color === 'xám đen'), 'FeCl3 dư + KI: từ 25/11 sổ theo dõi I₂; hết iodide thì I₂ tách thành kết tủa xám đen, không còn lớp màu cố định'); }
 // S3.3) Sổ vẫn là dữ liệu thuần (phần hình sao chép bằng JSON để tính trước): bản sao chạy tiếp cho cùng kết quả.
 { const t = newTube(); add(t, 'HCl', { mL: 3 }); add(t, 'Zn', { piece: true }); add(t, 'CuSO4', { mL: 1 }); const c = JSON.parse(JSON.stringify(t)); add(t, 'NaOH', { mL: 2 }); add(c, 'NaOH', { mL: 2 }); ok(JSON.stringify(t) === JSON.stringify(c), 'bản sao JSON của ống phải chạy tiếp giống hệt ống gốc'); }
 
@@ -177,6 +179,61 @@ for (const order of [['Mg', 'H2O'], ['H2O', 'Mg']]) {
   ok(filtered.filtrate.gasTotal === 0 && filtered.filtrate.lastGas === null, 'khí đã thoát ra không đi sang bình hứng');
   add(filtered.filtrate, 'NaOH', { mL: 4 });
   ok(filtered.filtrate.ppt.some(({ f }) => f === 'Zn(OH)2'), 'muối tan phát sinh vẫn dùng được sau lọc');
+}
+// ---------- nhóm halogen (25/11, bài Hoá 10 · Nhóm halogen; dữ kiện D1–D8 ở src/lessons/h10_nhom_halogen/facts.md) ----------
+// Lượng trong lọ: NaBr, KI 0,1 M; nước chlorine, nước bromine 0,05 M; nước iodine 0,01 M I₂ trong KI 0,1 M (số minh hoạ, data.js).
+{ const rxs = (ev) => ev.filter((e) => e.kind === 'reaction'), eqs = (ev) => rxs(ev).filter((e) => !e.phase).map((e) => e.r.equation), fx = (ev, type) => rxs(ev).flatMap((e) => e.r.effects.filter((x) => x.type === type));
+  const I2s = (t) => t.ppt.find((p) => p.f === 'I2')?.mol || 0, I2d = (t) => t.items.I2?.mol || 0, mm = (x) => Math.round(x * 1e7) / 1e4;
+  const atoms = (t, el) => Object.values(t.items).reduce((a, it) => a + it.mol * (parse(BY_ID[it.id].f)[el] || 0), 0) + t.ppt.reduce((a, p) => a + p.mol * (parse(p.f)[el] || 0), 0);
+  const rgbSum = (hex) => [1, 3, 5].reduce((a, i) => a + parseInt(hex.slice(i, i + 2), 16), 0);
+  // H1) D1: nước chlorine vào NaBr → Br₂, dung dịch cam; có cảnh báo an toàn.
+  { const t = newTube(); add(t, 'NaBr', { mL: 2 }); const res = add(t, 'Cl2', { mL: 1 }), ev = res.events;
+    ok(eqs(ev).join() === 'Cl₂ + 2NaBr → 2NaCl + Br₂' && rxs(ev)[0].r.ionic === 'Cl₂ + 2Br⁻ → 2Cl⁻ + Br₂', 'H1 phương trình Cl₂ + NaBr: ' + eqs(ev).join(' | '));
+    ok(fx(ev, 'color').some((x) => x.to === 'cam'), 'H1 dung dịch chuyển cam');
+    ok(near(t.items.Br2.mol, 0.00005) && near(t.items.NaBr.mol, 0.0001) && t.items.Cl2.mol < 1e-12 && near(t.items.NaCl.mol, 0.0001), `H1 lượng: Br₂ ${mm(t.items.Br2.mol)}, NaBr còn ${mm(t.items.NaBr.mol)} mmol`);
+    ok(rxs(ev)[0].r.safety === SAFETY.halogen && res.safety === SAFETY.halogen, 'H1 có r.safety và safety của lần thêm');
+    const h = look(t).hex, [r, , b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); ok(r > b + 40, 'H1 màu ống ngả cam: ' + h); }
+  // H2) D2: ít chlorine → I₂ tan (đỏ nâu); thêm chlorine tới dư so với iodide → I₂ tách thành kết tủa xám đen.
+  { const t = newTube(); add(t, 'KI', { mL: 2 }); let ev = add(t, 'Cl2', { mL: 1 }).events;
+    ok(eqs(ev).join() === 'Cl₂ + 2KI → 2KCl + I₂' && fx(ev, 'color').some((x) => x.to === 'đỏ nâu') && !fx(ev, 'ppt').length, 'H2 ít chlorine: dung dịch đỏ nâu, chưa có kết tủa');
+    ok(near(I2d(t), 0.00005) && I2s(t) === 0 && near(t.items.KI.mol, 0.0001), `H2 ít chlorine: I₂ tan ${mm(I2d(t))} mmol, KI còn ${mm(t.items.KI.mol)}`);
+    ev = add(t, 'Cl2', { mL: 4 }).events;
+    const ph = ev.find((e) => e.phase); ok(ph && ph.kind === 'reaction' && ph.r.equation === null && ph.r.effects.some((x) => x.type === 'ppt' && x.f === 'I2' && x.color === 'xám đen') && ph.r.safety === SAFETY.halogen, 'H2 dư chlorine: sự kiện riêng (phase) báo kết tủa xám đen, có cảnh báo');
+    { const u = newTube(); add(u, 'KI', { mL: 1 }); const parts = []; for (let i = 0; i < 12; i++) parts.push(...add(u, 'Cl2', { mL: 0.25 }).events); ok(parts.filter((e) => e.phase).length === 1 && near(I2s(u), 0.00005), 'H2 rót chia 12 phần như trang: đúng một sự kiện kết tủa iodine'); }
+    ok(near(I2s(t), 0.0001) && I2d(t) < 1e-12 && t.items.KI.mol < 1e-12 && near(t.items.Cl2.mol, 0.00015), `H2 dư chlorine: I₂ rắn ${mm(I2s(t))}, Cl₂ dư ${mm(t.items.Cl2.mol)} mmol`);
+    const net = rxs(ev).flatMap((e) => e.made).filter((x) => x.f === 'I2').reduce((a, x) => a + x.mol, 0); ok(near(net, 0.00005), 'H2 made: cộng theo công thức chỉ tăng đúng phần I₂ mới sinh'); }
+  // H3) D3: nước bromine vào KI → I₂ đỏ nâu; có cảnh báo. D4: nước bromine vào NaCl → không phản ứng, vẫn có cảnh báo.
+  { const t = newTube(); add(t, 'KI', { mL: 2 }); const ev = add(t, 'Br2', { mL: 1 }).events;
+    ok(eqs(ev).join() === 'Br₂ + 2KI → 2KBr + I₂' && near(I2d(t), 0.00005) && near(t.items.KBr.mol, 0.0001) && rxs(ev)[0].r.safety === SAFETY.halogen, 'H3 Br₂ + KI: ' + eqs(ev).join(' | '));
+    const u = newTube(); add(u, 'NaCl', { mL: 2 }); const res = add(u, 'Br2', { mL: 1 });
+    ok(!rxs(res.events).length && res.events.some((e) => e.kind === 'none' && e.r.safety === SAFETY.halogen) && near(u.items.Br2.mol, 0.00005) && near(u.items.NaCl.mol, 0.001), 'H3 Br₂ + NaCl: không phản ứng, sổ giữ nguyên'); }
+  // H4) D5: nước iodine vào NaBr, NaCl → không phản ứng; iodine vẫn tan (lọ có KI); không có cảnh báo halogen.
+  for (const salt of ['NaBr', 'NaCl']) { const t = newTube(); add(t, salt, { mL: 2 }); const res = add(t, 'I2', { mL: 1 });
+    ok(!rxs(res.events).length && near(I2d(t), 0.00001) && I2s(t) === 0 && near(t.items.KI.mol, 0.0001) && !res.safety, `H4 nước iodine + ${salt}: không phản ứng, iodine vẫn tan`); }
+  // H5) D8: hồ tinh bột có và không có I₂.
+  { const t = newTube(); add(t, 'KI', { mL: 2 }); let ev = add(t, 'tinhbot', { mL: 0.05, drop: true }).events;
+    ok(ev.some((e) => e.kind === 'indicator' && e.id === 'tinhbot' && !e.changed && e.to === 'không đổi màu'), 'H5 hồ tinh bột trong KI: không đổi màu');
+    const before = look(t).hex; ev = add(t, 'Cl2', { mL: 1 }).events;
+    ok(ev.some((e) => e.kind === 'indicator' && e.id === 'tinhbot' && e.changed && e.to === 'xanh đen') && rgbSum(look(t).hex) < rgbSum(before) - 200, 'H5 có I₂: hồ tinh bột hoá xanh đen, ống sẫm lại ' + look(t).hex);
+    ok(t.indicator === null, 'H5 hồ tinh bột không chiếm chỗ chỉ thị pH');
+    const u = newTube(); add(u, 'NaBr', { mL: 2 }); add(u, 'Cl2', { mL: 1 }); const eu = add(u, 'tinhbot', { mL: 0.05, drop: true }).events;
+    ok(eu.some((e) => e.kind === 'indicator' && !e.changed), 'H5 có Br₂ nhưng không có I₂: hồ tinh bột không đổi màu');
+    const w = newTube(); add(w, 'KI', { mL: 1 }); add(w, 'Cl2', { mL: 3 }); ok(I2s(w) > 0 && add(w, 'tinhbot', { mL: 0.05, drop: true }).events.some((e) => e.kind === 'indicator' && e.changed), 'H5 I₂ ở dạng kết tủa vẫn làm hồ tinh bột xanh đen'); }
+  // H6) Bảo toàn halogen; thứ tự cho muối không đổi lượng cuối (Br₂ sinh ra tiếp tục oxi hoá I⁻).
+  { const run = (first, second) => { const t = newTube(); add(t, first, { mL: 2 }); add(t, second, { mL: 2 }); add(t, 'Cl2', { mL: 3 }); return t; };
+    const a = run('KI', 'NaBr'), b = run('NaBr', 'KI');
+    for (const [t, n] of [[a, 'KI trước'], [b, 'NaBr trước']]) ok(near(atoms(t, 'Cl'), 0.0003) && near(atoms(t, 'Br'), 0.0002) && near(atoms(t, 'I'), 0.0002), `H6 bảo toàn Cl, Br, I (${n}): ${mm(atoms(t, 'Cl'))}, ${mm(atoms(t, 'Br'))}, ${mm(atoms(t, 'I'))} mmol`);
+    ok(near(a.items.Br2.mol, b.items.Br2.mol) && near(I2s(a) + I2d(a), I2s(b) + I2d(b)) && near(I2s(a), 0.0001) && near(a.items.Br2.mol, 0.00005), `H6 lượng cuối không phụ thuộc thứ tự: Br₂ ${mm(a.items.Br2.mol)}/${mm(b.items.Br2.mol)}, I₂ ${mm(I2s(a))}/${mm(I2s(b))}`); }
+  // H7) Nước iodine gặp nước chlorine dư: KI đi kèm bị oxi hoá hết, I₂ tách ra; thêm KI thì kết tủa iodine tan lại.
+  { const t = newTube(); add(t, 'I2', { mL: 2 }); ok(contents(t).length === 1 && contents(t)[0].id === 'I2', 'H7 bảng trong ống chỉ hiện nước iodine, KI đi kèm không hiện riêng');
+    add(t, 'Cl2', { mL: 4 }); ok(t.items.KI.mol < 1e-12 && near(I2s(t), 0.00002 + 0.0001), `H7 chlorine dư: I₂ rắn ${mm(I2s(t))} mmol`);
+    const ev = add(t, 'KI', { mL: 3 }).events; ok(eqs(ev).join() === 'Cl₂ + 2KI → 2KCl + I₂' && t.items.Cl2.mol < 1e-12 && I2s(t) === 0 && near(I2d(t), 0.00022) && fx(ev, 'dissolve').some((x) => /iodine/.test(x.what)), `H7 thêm KI: chlorine dư oxi hoá tiếp, KI còn lại hoà tan kết tủa iodine (I₂ tan ${mm(I2d(t))} mmol)`); }
+  // H8) Phản ứng cũ không đổi.
+  { const t = newTube(); add(t, 'CuSO4', { mL: 2 }); ok(eqs(add(t, 'NaOH', { mL: 1 }).events).join() === '2NaOH + CuSO₄ → Cu(OH)₂↓ + Na₂SO₄', 'H8 CuSO₄ + NaOH như cũ');
+    const n = newTube(); add(n, 'Na', { piece: true }); const en = add(n, 'HCl', { mL: 2 }).events; ok(eqs(en)[0] === '2Na + 2HCl → 2NaCl + H₂↑' && rxs(en)[0].r.safety === ALKALI_SAFETY.acid, 'H8 Na + HCl như cũ, cảnh báo kim loại kiềm giữ nguyên');
+    const g = newTube(); add(g, 'NaCl', { mL: 1 }); const eg = add(g, 'AgNO3', { mL: 1 }).events; ok(eqs(eg).join() === 'AgNO₃ + NaCl → AgCl↓ + NaNO₃' && !rxs(eg)[0].r.safety, 'H8 AgNO₃ + NaCl như cũ, không có cảnh báo');
+    const k = newTube(); add(k, 'KI', { mL: 1 }); const ek = add(k, 'AgNO3', { mL: 1 }).events; ok(eqs(ek).join() === 'AgNO₃ + KI → AgI↓ + KNO₃' && k.ppt[0].f === 'AgI', 'H8 AgNO₃ + KI như cũ: ' + eqs(ek).join());
+    const br = newTube(); add(br, 'NaBr', { mL: 1 }); ok(add(br, 'AgNO3', { mL: 1 }).events.some((e) => e.kind === 'reaction' && br.ppt[0]?.f === 'AgBr'), 'H8 AgNO₃ + NaBr: kết tủa AgBr'); }
 }
 console.log(fail ? `CẦN SỬA: ${fail} lỗi` : 'ĐẠT: sổ sách ống nghiệm');
 process.exit(fail ? 1 : 0);

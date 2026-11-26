@@ -8,7 +8,7 @@
 // Sự kiện phản ứng: made liệt kê chất sinh ra; một dòng made có mol ÂM nghĩa là chất do phản ứng trước sinh ra nay bị tiêu hao bấy nhiêu
 // (kết tủa tan, sản phẩm tan phản ứng tiếp). Cộng dồn made theo công thức luôn ra đúng lượng sản phẩm đang còn, không bao giờ âm.
 import { predict, predictPpt, soluteId, pptId, BY_ID } from '../chem/engine.js';
-import { INDICATOR, CAOH2_SAT_G_L, ALKALI_SAFETY } from '../chem/data.js';
+import { INDICATOR, CAOH2_SAT_G_L, ALKALI_SAFETY, SAFETY, IODINE_SOLID } from '../chem/data.js';
 import { molarMass, pretty, equation } from '../chem/formula.js';
 
 export const DROP_ML = 0.05, MAX_ML = 12, CLEAR = '#dcecf5'; // MAX_ML: sức chứa mặc định (ống nghiệm). Mỗi bình mang sức chứa riêng t.cap (cốc 100 mL: 100)
@@ -33,19 +33,57 @@ export function add(t, id, amt) {
   const events = t.pour && t.pour.id !== id ? endPour(t).events : []; // phần hình quên đóng lần rót trước: đóng hộ trước khi thêm chất khác
   const it = item(t, id), firstWater = id === 'H2O' && t.vol <= EPS;
   if (amt.mL) { t.vol += amt.mL; it.mL += amt.mL; if (amt.drop) it.drops += 1; }
-  if (c.group === 'indicator') t.indicator = id;
+  const haz = hazardOf(t, id), carried = [];
+  if (c.group === 'indicator') { if (!c.senses) t.indicator = id; } // thuốc thử nhận biết (hồ tinh bột) không chiếm chỗ chỉ thị pH
   else if (isSolid(id)) { const m = (PIECE[id] || PIECE_DEF).g / molarMass(c.f); it.mol += m; it.mol0 += m; it.pieces += 1; }
-  else if (id !== 'H2O') { const m = (c.conc * amt.mL) / 1000; it.mol += m; it.mol0 += m; }
+  else if (id !== 'H2O') { const m = (c.conc * amt.mL) / 1000; it.mol += m; it.mol0 += m;
+    for (const [cid, k] of Object.entries(c.carry || {})) { const ci = item(t, cid), mc = (k * amt.mL) / 1000; ci.mol += mc; ci.mol0 += mc; carried.push(cid); } } // chất đi kèm trong cùng lọ (nước iodine có KI)
   if (isReagent(id)) events.push(...react(t, id, 0));
   else if (id === 'H2O') events.push(...wet(t, firstWater));
+  for (const cid of carried) if (t.items[cid].mol > EPS) events.push(...react(t, cid, 0));
   events.push(...settle(t)); limeEq(t);
   if (['acid', 'base'].includes(c.group) && !events.some((e) => e.kind === 'reaction')) { const q = pptQuiet(t, id, events.length > 0); if (q) events.push(q); }
-  indicatorEvent(t, events);
-  return { events };
+  iodinePhase(t, events); indicatorEvent(t, events);
+  return finish(t, events, haz);
+}
+
+// ---------- cảnh báo an toàn theo chất trong ống (25/11) ----------
+// Chất có trường hazard (nước chlorine, nước bromine; cả bromine do phản ứng sinh ra): mọi sự kiện của lần thêm chất đó mang r.safety = SAFETY[hazard],
+// trừ sự kiện đã có câu riêng (kim loại kiềm). Kết quả add/endPour cũng có trường safety (chuỗi) khi ống đang có chất nguy hiểm, kể cả khi không có sự kiện.
+function hazardOf(t, id) {
+  const h = (x) => BY_ID[x].hazard; if (id && h(id)) return SAFETY[h(id)];
+  for (const y of t.order) if (h(y) && t.items[y].mol > EPS) return SAFETY[h(y)];
+  return null;
+}
+function finish(t, events, haz) {
+  const safety = haz || hazardOf(t); if (safety) for (const e of events) if (e.r && !e.r.safety) e.r.safety = safety;
+  return safety ? { events, safety } : { events };
+}
+
+// ---------- iodine: tan hay tách ra (25/11) ----------
+// I₂ tan được trong dung dịch còn ion iodide (tạo I₃⁻, màu đỏ nâu); hết iodide thì I₂ tách ra thành chất rắn xám đen; thêm iodide thì tan lại.
+// Nguồn: Chemguide, "Halogens as oxidising agents" ("…as a dark grey precipitate if the chlorine is in excess…", "iodine dissolves in potassium iodide…"), D2, D3.
+// Giới hạn: phần rất nhỏ I₂ còn tan trong nước khi hết iodide chưa được tính (chưa có số liệu có nguồn).
+function iodinePhase(t, events) {
+  const I = t.items.I2, ice = t.ppt.find((p) => p.f === 'I2');
+  const iodide = t.order.some((y) => BY_ID[y].ions && BY_ID[y].ions[2] === 'I' && t.items[y].mol > EPS);
+  let m = 0, fx;
+  if (!iodide && I && I.mol > EPS) { m = I.mol; take(I, m); if (ice) ice.mol += m; else t.ppt.push({ f: 'I2', mol: m, color: IODINE_SOLID.color, form: IODINE_SOLID.form });
+    fx = { type: 'ppt', f: 'I2', color: IODINE_SOLID.color, form: IODINE_SOLID.form, text: `Iodine tách ra thành kết tủa ${IODINE_SOLID.color} (I₂) vì không còn ion iodide để hoà tan` }; }
+  else if (iodide && ice && ice.mol > EPS) { m = -ice.mol; ice.mol = 0; const it = item(t, 'I2'); it.mol -= m; it.byRx = (it.byRx || 0) - m;
+    fx = { type: 'dissolve', what: 'Kết tủa iodine', text: 'Kết tủa iodine tan lại trong dung dịch iodide, dung dịch màu đỏ nâu' }; }
+  if (!fx) return;
+  const made = [{ f: 'I2', mol: m, mark: '↓' }, { f: 'I2', mol: -m, mark: '' }]; // cộng theo công thức: lượng I₂ không đổi, chỉ đổi pha
+  // Sự kiện riêng (không gộp vào phản ứng vừa xảy ra), để phần hình gộp theo phương trình không làm mất hiện tượng này. equation: null, phase: true.
+  events.push({ kind: 'reaction', phase: true, a: 'I2', b: 'I2', extent: Math.abs(m), made, used: {}, out: null, slow: false,
+    r: { title: 'Iodine', eq: null, equation: null, effects: [fx], phenomenon: fx.text + '.', reason: m > 0 ? 'Không còn ion iodide nên iodine không tan được, tách ra thành chất rắn.' : 'Iodine tan trong dung dịch có ion iodide, tạo ion I₃⁻ màu đỏ nâu.', notes: [] } });
 }
 function indicatorEvent(t, events) {
   const ind = indicatorLook(t);
   if (ind && ind.color !== t.indShown) { events.push({ kind: 'indicator', id: t.indicator, from: t.indShown, to: ind.color, changed: ind.changed, pH: ind.pH, first: t.indShown === null }); t.indShown = ind.color; }
+  for (const id of t.order) { const c = BY_ID[id]; if (!c.senses || !(t.items[id].mL > 0)) continue; // thuốc thử nhận biết: hồ tinh bột hoá xanh đen khi trong ống có I₂ (tan hoặc kết tủa)
+    const on = probeOn(t, id), to = on ? c.on : 'không đổi màu'; t.probeShown = t.probeShown || {};
+    if (t.probeShown[id] !== to) { events.push({ kind: 'indicator', id, a: id, b: c.senses, from: t.probeShown[id] ?? null, to, changed: on, first: t.probeShown[id] === undefined }); t.probeShown[id] = to; } }
 }
 
 // ---------- một lần rót (21/11, lỗi Na + HCl, mục 48 LUONG_2_TRAI_NGHIEM.md) ----------
@@ -64,8 +102,8 @@ export function endPour(t) {
   const fresh = [];
   for (const y of [...t.order]) if (BY_ID[y].alkali && t.items[y].mol > EPS) { const res = pair(t, y, 'H2O', fresh); if (res.event) events.push(res.event); }
   for (const pid of new Set(fresh)) if (t.items[pid].mol > EPS) events.push(...react(t, pid, 1).filter((e) => e.kind === 'reaction'));
-  events.push(...settle(t)); limeEq(t); indicatorEvent(t, events);
-  return { events };
+  events.push(...settle(t)); limeEq(t); iodinePhase(t, events); indicatorEvent(t, events);
+  return finish(t, events, null);
 }
 
 // Ghi sản phẩm của một phản ứng vào sổ, trả về danh sách made. skip: hai chất tham gia (không tính là "mới sinh"). solid: chất rắn tham gia (để ghi lớp kim loại bám).
@@ -81,6 +119,7 @@ function land(t, r, ext, skip, fresh, solid) {
   for (const e of r.effects) {
     // Màu mới của dung dịch: nếu do một sản phẩm tan đang được theo dõi mang (Cu²⁺, Fe²⁺, Fe³⁺) thì để chính chất đó giữ màu, hết chất là hết màu.
     // Chỉ khi không quy được cho chất nào (I₂, phức Fe(SCN)₃…) mới ghi thành lớp màu cố định như trước.
+    if (e.type === 'color' && e.hex && carriers.some((pid) => !BY_ID[pid].derived && BY_ID[pid].hex === e.hex)) continue; // màu của chính chất tan trong tủ vừa sinh ra (Br₂, I₂): chất đó tự mang màu
     if (e.type === 'color' && e.hex) { if (carriers.length && !loose) { for (const pid of carriers) if (BY_ID[pid].derived) t.items[pid].hex = e.hex; } else { const old = t.tints.find((q) => q.hex === e.hex); if (old) old.mol += ext; else t.tints.push({ hex: e.hex, name: e.to, mol: ext }); } }
     if (e.type === 'coat' && solid) solid.coat = e.color;
   }
@@ -198,6 +237,7 @@ export function pH(t) {
     const dil = Math.log10(Math.max(c.conc / (it.mol / V), 1)); if (c.ph > 7.5) hi = Math.max(hi, c.ph - 0.5 * dil); if (c.ph < 6.5) lo = Math.min(lo, c.ph + 0.5 * dil); }
   return hi > 7.5 ? hi : lo;
 }
+const probeOn = (t, id) => { const s = BY_ID[BY_ID[id].senses]; return (t.items[s.id]?.mol || 0) > EPS || t.ppt.some((p) => p.f === s.f && p.mol > EPS); };
 export function indicatorLook(t) {
   if (!t.indicator || t.vol <= 0) return null; const p = pH(t); let [color, hex] = INDICATOR[t.indicator](p);
   if (t.indicator === 'pp' && p > 8.2 && p < 9) [color, hex] = ['hồng rất nhạt', '#f3b6d6'];
@@ -212,6 +252,7 @@ export function look(t) {
   for (const it of Object.values(t.items)) { const ch = BY_ID[it.id], hex = it.hex || ch.hex, ref = ch.conc || ch.ref; if (hex && ref && it.mol > 1e-9) blend(hex, clamp(Math.pow(it.mol / V / (ref * 0.7), 0.65), 0, 1)); } // chất phát sinh có màu (CuCl₂, FeCl₂…): mốc đậm nhạt ref lấy theo muối cùng cation trong tủ
   for (const tn of t.tints) blend(tn.hex, clamp(Math.pow(tn.mol / V / 0.004, 0.6), 0, 1));
   const ind = indicatorLook(t); if (ind && ind.hex && (ind.changed || t.indicator === 'quy')) blend(ind.hex, ind.color === 'hồng rất nhạt' ? 0.35 : t.indicator === 'quy' && !ind.changed ? 0.3 : 0.8);
+  for (const id of t.order) if (BY_ID[id].senses && t.items[id].mL > 0 && probeOn(t, id)) blend(BY_ID[id].onHex, 0.85); // hồ tinh bột + iodine
   return { hex: '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join(''), opacity: op };
 }
 export const pptTotal = (t) => t.ppt.reduce((s, p) => s + p.mol, 0);
@@ -238,6 +279,7 @@ export function separateFiltrate(source, receiver) {
   filtrate.tints = source.tints.map((entry) => ({ ...entry }));
   filtrate.indicator = source.indicator;
   filtrate.indShown = source.indShown;
+  filtrate.probeShown = { ...(source.probeShown || {}) };
   const residue = source.ppt.filter(({ mol }) => mol > EPS).map(({ f, color, mol }) => ({ f, color, mol }));
   for (const id of source.order) {
     const { mol } = source.items[id];

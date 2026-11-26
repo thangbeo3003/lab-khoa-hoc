@@ -3,7 +3,7 @@
 
 const SUB = '₀₁₂₃₄₅₆₇₈₉';
 const SUP = { '+': '⁺', '-': '⁻', 1: '', 2: '²', 3: '³', 4: '⁴' };
-export const MASS = { H: 1.008, C: 12.011, N: 14.007, O: 15.999, Na: 22.99, Mg: 24.305, Al: 26.982, S: 32.06, Cl: 35.45, K: 39.098, Ca: 40.078, Mn: 54.938, Fe: 55.845, Cu: 63.546, Zn: 65.38, Ag: 107.868, I: 126.904, Ba: 137.327, Pb: 207.2 };
+export const MASS = { H: 1.008, C: 12.011, N: 14.007, O: 15.999, Na: 22.99, Mg: 24.305, Al: 26.982, S: 32.06, Cl: 35.45, K: 39.098, Ca: 40.078, Mn: 54.938, Fe: 55.845, Cu: 63.546, Zn: 65.38, Ag: 107.868, I: 126.904, Br: 79.904, Ba: 137.327, Pb: 207.2 };
 
 export const pretty = (f) => f.replace(/\d/g, (d) => SUB[d]);
 export const prettyIon = (f, q) => pretty(f) + (SUP[Math.abs(q)] ?? '') + SUP[q > 0 ? '+' : '-'];

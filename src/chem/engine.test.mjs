@@ -86,11 +86,12 @@ T('MnO2', 'HCl', 'none'); T('Zn', 'Fe', 'na'); T('KMnO4', 'HCl', 'na'); T('Mg', 
 // 4) Chất phát sinh trong ống (S3, 21/11): sản phẩm tan và kết tủa không có trong tủ.
 { const dIds = DERIVED.map((d) => d.id), salts = DERIVED.filter((d) => d.group === 'salt');
   if (new Set(dIds).size !== dIds.length || dIds.some((id) => ids.includes(id))) bad('mã chất phát sinh bị trùng');
-  if (CHEMS.some((c) => c.derived) || CHEMS.length !== 40) bad('chất phát sinh không được lẫn vào tủ (CHEMS)');
+  if (CHEMS.some((c) => c.derived) || CHEMS.length !== 46) bad('chất phát sinh không được lẫn vào tủ (CHEMS)');
   for (const d of DERIVED) { try { parse(d.f); } catch (e) { bad(`chất phát sinh ${d.f}: ${e.message}`); } if (BY_ID[d.id] !== d || !d.name || !d.color) bad(`chất phát sinh ${d.f}: thiếu trường`);
     if (d.group === 'salt' ? soluteId(d.f) !== d.id || !d.ions : pptId(d.f) !== d.id) bad(`chất phát sinh ${d.f}: tra mã sai`); }
   for (const f of ['ZnCl2', 'FeCl2', 'CuCl2', 'Cu(NO3)2', 'Fe(NO3)3', 'Al2(SO4)3', 'CH3COONa', 'CaSO4', 'KNO3']) if (!soluteId(f)) bad(`${f} phải là chất tan được sổ theo dõi`);
-  for (const f of ['Fe(SCN)3', 'I2', 'Na[Al(OH)4]', 'K2CO3', 'KOH', 'Cu(OH)2', 'BaSO4']) if (soluteId(f)) bad(`${f} không được coi là chất tan đơn giản`);
+  if (soluteId('I2') !== 'I2' || soluteId('Br2') !== 'Br2' || soluteId('Cl2') !== 'Cl2') bad('halogen sinh ra (Cl₂, Br₂, I₂) phải là chất tan sổ ống theo dõi được (25/11)');
+  for (const f of ['Fe(SCN)3', 'Na[Al(OH)4]', 'K2CO3', 'KOH', 'Cu(OH)2', 'BaSO4']) if (soluteId(f)) bad(`${f} không được coi là chất tan đơn giản`);
   if (soluteId('NaCl') !== 'NaCl' || soluteId('Ca(OH)2') !== 'CaOH2' || pptId('CaCO3') !== 'CaCO3' || pptId('Cu(OH)2') !== 'CuOH2') bad('tra mã chất trong tủ sai');
   // mọi cặp (chất phát sinh tan) × (cả tủ + chất phát sinh tan): không lỗi, phương trình cân bằng, không phụ thuộc thứ tự
   let n = 0, rxn = 0; const all = [...ids, ...salts.map((d) => d.id)];

@@ -4,11 +4,11 @@
 //   'na'       chưa có dữ liệu (không đoán)
 // Thứ tự xét: bảng ngoại lệ viết tay → các luật → mặc định 'na'.
 // Bản thử 18/11/2026. CHƯA có giáo viên Hoá duyệt.
-import { CATIONS, ANIONS, CHEMS, BY_ID, SERIES, CATION_METAL, METAL_LOOK, INSOLUBLE, KSP, NA_PAIRS, INDICATOR, PPT_ACID, PPT_BASE_INERT, PPT_INERT } from './data.js';
+import { CATIONS, ANIONS, CHEMS, BY_ID, SERIES, CATION_METAL, METAL_LOOK, INSOLUBLE, KSP, NA_PAIRS, INDICATOR, PPT_ACID, PPT_BASE_INERT, PPT_INERT, HALOGEN_SERIES } from './data.js';
 import { equation, pretty, prettyIon, parse, molarMass } from './formula.js';
 
 const gcd = (a, b) => (b ? gcd(b, a % b) : a);
-const ACID_OF = { Cl: 'HCl', NO3: 'HNO3', SO4: 'H2SO4', CO3: 'H2CO3', HCO3: 'H2CO3', CH3COO: 'CH3COOH', OH: 'H2O', I: 'HI', SCN: 'HSCN', MnO4: 'HMnO4' };
+const ACID_OF = { Cl: 'HCl', NO3: 'HNO3', SO4: 'H2SO4', CO3: 'H2CO3', HCO3: 'H2CO3', CH3COO: 'CH3COOH', OH: 'H2O', I: 'HI', SCN: 'HSCN', MnO4: 'HMnO4', Br: 'HBr' };
 const METAL_CATION = { Na: 'Na', Mg: 'Mg', Al: 'Al', Zn: 'Zn', Fe: 'Fe2', Cu: 'Cu', Ag: 'Ag' };
 const VN = { Na: 'sodium', Mg: 'magnesium', Al: 'nhôm', Zn: 'kẽm', Fe: 'sắt', Cu: 'đồng', Ag: 'bạc', Pb: 'chì' };
 const rank = (m) => SERIES.indexOf(m);
@@ -28,11 +28,11 @@ export function compound(catId, anId) {
 // theo dõi và cho phản ứng tiếp bằng CHÍNH các bảng ion của máy. Không nằm trong CHEMS nên không hiện trong tủ và không đổi 780 cặp của bài kiểm.
 // Không tự sinh muối của OH⁻, CO₃²⁻, HCO₃⁻, MnO₄⁻ (pH và tính oxi hoá chưa có dữ liệu) và các cặp ion trong NA_PAIRS.
 const CAT_NAME = { Na: 'Sodium', K: 'Potassium', NH4: 'Ammonium', Ag: 'Silver', Ba: 'Barium', Ca: 'Calcium', Mg: 'Magnesium', Zn: 'Zinc', Cu: 'Copper(II)', Fe2: 'Iron(II)', Fe3: 'Iron(III)', Al: 'Aluminium', Pb: 'Lead(II)' };
-const AN_NAME = { Cl: 'chloride', NO3: 'nitrate', SO4: 'sulfate', CO3: 'carbonate', HCO3: 'hydrogencarbonate', OH: 'hydroxide', I: 'iodide', CH3COO: 'acetate', MnO4: 'permanganate', SCN: 'thiocyanate' };
+const AN_NAME = { Cl: 'chloride', NO3: 'nitrate', SO4: 'sulfate', CO3: 'carbonate', HCO3: 'hydrogencarbonate', OH: 'hydroxide', I: 'iodide', CH3COO: 'acetate', MnO4: 'permanganate', SCN: 'thiocyanate', Br: 'bromide' };
 // Màu của cation trong dung dịch: lấy đúng màu đã khai cho muối cùng cation trong tủ (không thêm màu mới).
 const ION_LOOK = { Cu: BY_ID.CuSO4, Fe2: BY_ID.FeSO4, Fe3: BY_ID.FeCl3 };
 const STOCK_F = Object.fromEntries(CHEMS.filter((c) => c.group !== 'indicator').map((c) => [c.f, c.id]));
-const SOLUTE_ID = Object.fromEntries(CHEMS.filter((c) => c.conc && c.ions).map((c) => [c.f, c.id])), PPT_ID = { ...STOCK_F };
+const SOLUTE_ID = Object.fromEntries(CHEMS.filter((c) => c.conc && (c.ions || c.halogen)).map((c) => [c.f, c.id])), PPT_ID = { ...STOCK_F }; // halogen sinh ra (Br₂, I₂) là chất tan sổ ống theo dõi được
 export const PAIR_OF = {}, DERIVED = [];
 const derive = (f, extra) => { const id = f.replace(/[()[\]]/g, ''); if (BY_ID[id]) throw new Error(`Trùng mã chất phát sinh: ${id}`); const c = { id, f, derived: true, ...extra }; BY_ID[id] = c; DERIVED.push(c); return id; };
 for (const c of Object.keys(CATIONS)) { if (c === 'H') continue; for (const a of Object.keys(ANIONS)) {
@@ -75,8 +75,8 @@ const P = { '↓': (...fs) => Object.fromEntries(fs.map((f) => [f, '↓'])), '�
 ex('AgNO3', 'NaOH', (a, b) => rx(a, b, ['AgNO3', 'NaOH'], ['Ag2O', 'H2O', 'NaNO3'], P['↓']('Ag2O'), [E.ppt('Ag2O', 'nâu đen')], 'AgOH không bền, phân huỷ ngay thành Ag₂O.'));
 ex('AgNO3', 'CaOH2', (a, b) => rx(a, b, ['AgNO3', 'Ca(OH)2'], ['Ag2O', 'H2O', 'Ca(NO3)2'], P['↓']('Ag2O'), [E.ppt('Ag2O', 'nâu đen')], 'AgOH không bền, phân huỷ ngay thành Ag₂O.'));
 ex('FeCl3', 'KSCN', (a, b) => rx(a, b, ['FeCl3', 'KSCN'], ['Fe(SCN)3', 'KCl'], {}, [E.color('vàng nâu', 'đỏ máu', '#b3121d')], 'Ion Fe³⁺ kết hợp với SCN⁻ tạo phức màu đỏ máu. Phản ứng rất nhạy, dùng để nhận biết Fe³⁺.', { ionic: 'Fe³⁺ + 3SCN⁻ → Fe(SCN)₃' }));
-ex('FeCl3', 'KI', (a, b) => rx(a, b, ['FeCl3', 'KI'], ['FeCl2', 'I2', 'KCl'], {}, [E.color('vàng nâu', 'nâu sẫm', '#6b3a12')], 'Fe³⁺ oxi hoá I⁻ thành I₂ (màu nâu), bản thân bị khử về Fe²⁺.', { ionic: '2Fe³⁺ + 2I⁻ → 2Fe²⁺ + I₂' }));
-ex('CuSO4', 'KI', (a, b) => rx(a, b, ['CuSO4', 'KI'], ['CuI', 'I2', 'K2SO4'], P['↓']('CuI'), [E.ppt('CuI', 'trắng'), E.color('xanh lam', 'nâu', '#7a4a1c')], 'Cu²⁺ oxi hoá I⁻ thành I₂ (màu nâu), bản thân bị khử thành CuI không tan.'));
+ex('FeCl3', 'KI', (a, b) => rx(a, b, ['FeCl3', 'KI'], ['FeCl2', 'I2', 'KCl'], {}, [E.color('vàng nâu', BY_ID.I2.color, BY_ID.I2.hex)], 'Fe³⁺ oxi hoá I⁻ thành I₂ (màu nâu), bản thân bị khử về Fe²⁺.', { ionic: '2Fe³⁺ + 2I⁻ → 2Fe²⁺ + I₂' }));
+ex('CuSO4', 'KI', (a, b) => rx(a, b, ['CuSO4', 'KI'], ['CuI', 'I2', 'K2SO4'], P['↓']('CuI'), [E.ppt('CuI', 'trắng'), E.color('xanh lam', BY_ID.I2.color, BY_ID.I2.hex)], 'Cu²⁺ oxi hoá I⁻ thành I₂ (màu nâu), bản thân bị khử thành CuI không tan.'));
 ex('FeCl3', 'Na2CO3', (a, b) => rx(a, b, ['FeCl3', 'Na2CO3', 'H2O'], ['Fe(OH)3', 'CO2', 'NaCl'], { ...P['↓']('Fe(OH)3'), ...P['↑']('CO2') }, [E.ppt('Fe(OH)3', 'nâu đỏ', 'keo'), E.gas('CO2', 'carbon dioxide')], 'Muối carbonate của Fe³⁺ không tồn tại trong nước: bị thuỷ phân hoàn toàn thành hydroxide và CO₂.'));
 ex('AlCl3', 'Na2CO3', (a, b) => rx(a, b, ['AlCl3', 'Na2CO3', 'H2O'], ['Al(OH)3', 'CO2', 'NaCl'], { ...P['↓']('Al(OH)3'), ...P['↑']('CO2') }, [E.ppt('Al(OH)3', 'trắng', 'keo'), E.gas('CO2', 'carbon dioxide')], 'Muối carbonate của Al³⁺ không tồn tại trong nước: bị thuỷ phân hoàn toàn thành hydroxide và CO₂.'));
 ex('FeCl3', 'NaHCO3', (a, b) => rx(a, b, ['FeCl3', 'NaHCO3'], ['Fe(OH)3', 'CO2', 'NaCl'], { ...P['↓']('Fe(OH)3'), ...P['↑']('CO2') }, [E.ppt('Fe(OH)3', 'nâu đỏ', 'keo'), E.gas('CO2', 'carbon dioxide')], 'Fe³⁺ và HCO₃⁻ thuỷ phân tương hỗ, tạo hydroxide không tan và CO₂.'));
@@ -97,11 +97,12 @@ for (const m of ['Zn', 'Mg', 'Al']) ex(m, 'FeCl3', (a, b) => note(rx(a, b, [m, '
 ex('Ag', 'FeCl3', (a, b) => none(a, b, 'Bạc không khử được Fe³⁺.'));
 ex('H2O2', 'MnO2', (a, b) => note(rx(a, b, ['H2O2'], ['H2O', 'O2'], P['↑']('O2'), [E.gas('O2', 'oxygen', { rate: 'mạnh' }), E.heat('nhẹ')], 'MnO₂ là chất xúc tác: làm hydrogen peroxide phân huỷ nhanh thành nước và oxygen.'), 'Sau phản ứng MnO₂ còn nguyên, có thể lọc ra dùng lại.'));
 ex('H2O2', 'FeCl3', (a, b) => note(rx(a, b, ['H2O2'], ['H2O', 'O2'], P['↑']('O2'), [E.gas('O2', 'oxygen', { rate: 'chậm' })], 'Ion Fe³⁺ xúc tác cho hydrogen peroxide phân huỷ thành nước và oxygen.'), 'FeCl₃ chỉ là chất xúc tác, không có trong phương trình.'));
+// Ba phản ứng sinh I₂ ở trên lấy màu của iodine trong dung dịch iodide từ lọ nước iodine (25/11), để sổ ống gán màu cho đúng chất I₂.
 // Phản ứng oxi hoá khử cần môi trường acid (thêm H2SO4 loãng).
 const NEED_ACID = 'Cần thêm môi trường acid (vài giọt H₂SO₄ loãng) thì phản ứng mới xảy ra rõ.';
 const fixed = (a, b, lhs, rhs, marks, effects, reason, opts) => (opts.medium === 'acid' ? rx(a, b, lhs, rhs, marks, effects, reason, { medium: 'acid' }) : { ...na(a, b, NEED_ACID), needs: 'acid' });
 ex('FeSO4', 'KMnO4', (a, b, o) => fixed(a, b, ['KMnO4', 'FeSO4', 'H2SO4'], ['Fe2(SO4)3', 'K2SO4', 'MnSO4', 'H2O'], {}, [E.color('tím', 'vàng rất nhạt', '#f2e6b8')], 'Trong môi trường acid, MnO₄⁻ (tím) oxi hoá Fe²⁺ thành Fe³⁺ và bị khử về Mn²⁺ gần như không màu.', o));
-ex('H2O2', 'KI', (a, b, o) => fixed(a, b, ['H2O2', 'KI', 'H2SO4'], ['I2', 'K2SO4', 'H2O'], {}, [E.color('không màu', 'nâu', '#7a4a1c')], 'Trong môi trường acid, hydrogen peroxide oxi hoá I⁻ thành I₂ (màu nâu).', o));
+ex('H2O2', 'KI', (a, b, o) => fixed(a, b, ['H2O2', 'KI', 'H2SO4'], ['I2', 'K2SO4', 'H2O'], {}, [E.color('không màu', BY_ID.I2.color, BY_ID.I2.hex)], 'Trong môi trường acid, hydrogen peroxide oxi hoá I⁻ thành I₂ (màu nâu).', o));
 ex('FeSO4', 'H2O2', (a, b, o) => fixed(a, b, ['FeSO4', 'H2O2', 'H2SO4'], ['Fe2(SO4)3', 'H2O'], {}, [E.color('lục nhạt', 'vàng nâu', '#d9a03b')], 'Trong môi trường acid, hydrogen peroxide oxi hoá Fe²⁺ thành Fe³⁺.', o));
 ex('CaCO3', 'H2SO4', (a, b) => note(rx(a, b, ['CaCO3', 'H2SO4'], ['CaSO4', 'CO2', 'H2O'], P['↑']('CO2'), [E.gas('CO2', 'carbon dioxide', { rate: 'chậm dần rồi dừng' })], 'Acid mạnh đẩy CO₂ ra khỏi muối carbonate.'), 'CaSO₄ ít tan bám quanh viên đá vôi, ngăn acid tiếp xúc, nên phản ứng chậm dần rồi dừng.'));
 ex('HCl', 'MnO2', (a, b) => none(a, b, 'Với HCl loãng ở nhiệt độ thường thì không phản ứng. Cần HCl đặc và đun nóng mới sinh khí chlorine.'));
@@ -114,6 +115,11 @@ ex('FeSO4', 'KSCN', (a, b) => note(none(a, b, 'Fe²⁺ không tạo phức màu 
 
 // ---------- các luật ----------
 function indicatorRule(ind, x) {
+  if (ind.senses) { // thuốc thử nhận biết một chất (hồ tinh bột nhận biết iodine), không theo pH
+    if (x.group === 'indicator' || x.group === 'metal' || x.group === 'solid') return na(ind, x);
+    if (x.f === ind.senses) return rx(ind, x, null, null, {}, [E.color('không màu', ind.on, ind.onHex)], `${ind.name} gặp ${pretty(x.f)} thì hoá ${ind.on}. Đây là cách nhận biết iodine.`);
+    return none(ind, x, `Trong dung dịch này không có ${pretty(ind.senses)} nên ${ind.name.toLowerCase()} không đổi màu.`, 'Không đổi màu.');
+  }
   if (x.group === 'indicator' || x.group === 'metal' || x.group === 'solid' || x.id === 'H2O2' || x.id === 'KMnO4' || typeof x.ph !== 'number') return na(ind, x);
   let [col, hex] = INDICATOR[ind.id](x.ph); if (ind.id === 'pp' && x.ph > 8.2 && x.ph < 9) [col, hex] = ['hồng rất nhạt', '#f3b6d6']; const changed = !col.includes('không đổi');
   const why = `Dung dịch ${pretty(x.f)} có pH khoảng ${String(x.ph).replace('.', ',')}.`;
@@ -249,6 +255,26 @@ function ammoniaRule(N, X) {
   return na(N, X);
 }
 
+// ---------- halogen gặp ion halide (25/11). Một luật cho mọi cặp, theo dãy HALOGEN_SERIES của data.js ----------
+const HAL_NAME = { Cl: 'chlorine', Br: 'bromine', I: 'iodine' }, halRank = (h) => HALOGEN_SERIES.indexOf(h);
+const HAL_LOOK = Object.fromEntries(CHEMS.filter((c) => c.halogen).map((c) => [c.halogen, c])); // màu của halogen trong dung dịch: lấy từ lọ nước halogen trong tủ
+const HAL_BUSY = ['Fe2', 'NH4']; // cation mà chính halogen cũng phản ứng được (Fe²⁺ bị oxi hoá; NH₄⁺ phức tạp): chưa có dữ liệu
+function halogenRule(X, Y) {
+  const h = X.halogen;
+  if (Y.halogen) return na(X, Y, 'Hai halogen gặp nhau phản ứng phức tạp hơn mức phổ thông. App chưa mô phỏng.');
+  const an = Y.ions && Y.ions[2], cat = Y.ions && Y.ions[0];
+  if (!isElectrolyte(Y) || halRank(an) < 0) return na(X, Y);
+  if (HAL_BUSY.includes(cat)) return na(X, Y, `Halogen còn phản ứng với ion ${prettyIon(CATIONS[cat].f, CATIONS[cat].q)}. App chưa mô phỏng.`);
+  const ion = (e) => prettyIon(ANIONS[e].f, -1);
+  if (an === h) return note(none(X, Y, `${pretty(X.f)} và ion ${ion(an)} là cùng một halogen nên không đẩy nhau.`, 'Không đổi, chỉ pha loãng.'), ...(h === 'I' ? ['Iodine tan trong dung dịch có ion iodide (tạo ion I₃⁻ màu đỏ nâu).'] : []));
+  if (halRank(h) > halRank(an)) return none(X, Y, `Tính oxi hoá giảm dần Cl₂ > Br₂ > I₂. ${pretty(X.f)} yếu hơn ${pretty(an + '2')} nên không lấy được electron của ion ${ion(an)}.`, 'Không đổi, chỉ pha loãng.');
+  const y2 = an + '2', look = HAL_LOOK[an], fx = [E.color(Y.color || 'không màu', look.color, look.hex)];
+  const r = rx(X, Y, [X.f, Y.f], [compound(cat, h), y2], {}, fx, `Tính oxi hoá giảm dần Cl₂ > Br₂ > I₂. ${HAL_NAME[h][0].toUpperCase() + HAL_NAME[h].slice(1)} mạnh hơn ${HAL_NAME[an]} nên lấy electron của ion ${ion(an)}, đẩy ${HAL_NAME[an]} ra khỏi muối.`,
+    { ionic: equation([{ f: X.f }, { f: an, q: -1 }], [{ f: h, q: -1 }, { f: y2 }])?.text });
+  if (an === 'I') note(r, `Iodine sinh ra tan trong ion iodide còn lại nên dung dịch màu đỏ nâu. Nếu ${HAL_NAME[h]} dư so với iodide, iodine tách ra thành kết tủa xám đen.`);
+  return r;
+}
+
 const isElectrolyte = (x) => x.ions && !x.special && (x.group === 'acid' || x.group === 'base' || x.group === 'salt');
 const REDUCING = ['Fe2', 'I', 'SCN'], oxNa = (A, B) => [[A, B], [B, A]].some(([x, y]) => x.id === 'HNO3' && y.ions && (REDUCING.includes(y.ions[0]) || REDUCING.includes(y.ions[2]))); // trong tủ: đúng 3 cặp HNO₃ + KI, FeSO₄, KSCN như trước
 
@@ -267,6 +293,7 @@ export function predict(idA, idB, opts = {}) {
   if ((p = pick((x) => x.id === 'H2O2'))) return p[1].id === 'H2O' ? none(p[0], p[1], 'Chỉ pha loãng dung dịch.') : na(p[0], p[1]);
   if ((p = pick((x) => x.id === 'H2O'))) return none(p[0], p[1], 'Chỉ pha loãng dung dịch.');
   if ((p = pick((x) => x.id === 'NH3'))) return ammoniaRule(p[0], p[1]);
+  if ((p = pick((x) => x.halogen))) return halogenRule(p[0], p[1]);
   if (oxNa(A, B)) return na(A, B, 'Nitric acid có tính oxi hoá, phản ứng với chất khử này phức tạp hơn mức phổ thông. App chưa mô phỏng.');
   if (isElectrolyte(A) && isElectrolyte(B)) return ionRule(A, B, opts);
   return na(A, B);
