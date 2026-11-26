@@ -7,6 +7,7 @@
 //       luôn quay mặt về máy quay; dung dịch, nắp, nhãn, vạch chia vẫn là 3D. Đèn cồn và bình tia thay CẢ MÓN bằng ảnh (giữ ngọn lửa, nắp chụp, nhãn).
 //       Món chưa có ảnh (xi-lanh khí, mặt kính đồng hồ) giữ kính 3D.
 import * as THREE from 'three';
+import { PHOTO_SORT } from './labware_l1.js'; // tấm ảnh của tủ đồ L1 khai sort (lọ ống hút, giá gỗ, chậu, cốc thải): xếp thứ tự vẽ chung với ảnh dụng cụ
 
 const isGlass = (m) => !!m && m.isMeshPhysicalMaterial && m.envMapIntensity === 2.4 && m.depthWrite === false;
 const isRim = (m) => !!m && m.isMeshPhysicalMaterial && m.envMapIntensity === 2.2 && m.transparent;
@@ -195,7 +196,8 @@ export function applyGlassLook(mode, { stage, list }) {
           r.obj.worldToLocal(P.copy(camera.position)); r.d = P.length(); r.pair.rotation.y = Math.atan2(P.x, P.z);
           const el = Math.atan2(P.y - r.y0, Math.hypot(P.x, P.z)); r.pair.rotation.x = -Math.max(0, Math.min(0.75, (el - 0.24) * 0.8));
         });
-        if (order.length !== boards.length) { order.length = 0; order.push(...boards); }
+        PHOTO_SORT.forEach((r) => { r.obj.worldToLocal(P.copy(camera.position)); r.d = P.length() + (r.bias || 0); });
+        if (order.length !== boards.length + PHOTO_SORT.length) { order.length = 0; order.push(...boards, ...PHOTO_SORT); }
         order.sort((a, b) => b.d - a.d);
         order.forEach((r, n) => { const base = 20 + n * 3; r.pair.children.forEach((m, i) => { m.renderOrder = base + i; }); r.tops.forEach((o) => { o.renderOrder = base + 2; }); });
       });

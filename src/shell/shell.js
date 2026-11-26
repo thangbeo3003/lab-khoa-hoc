@@ -2,6 +2,7 @@
 // Bài học cắm vào qua shell.attach(lesson) với: enter(i), renderPanel(i, host), isDone(i).
 // Trang có <html data-ui="ds">: thêm vỏ app theo DESIGN_SYSTEM.md (sidebar, topbar có breadcrumb); kiểu dáng ở ds.css + shell_ds.css. Logic bước, lưu tiến độ, phím tắt không đổi.
 import { icon } from '../free/icons.js';
+import { READY } from '../catalog/hoa.js';
 
 export function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
@@ -61,9 +62,34 @@ export function createShell(root, { meta, steps }) {
   // đầu trang ba hàng: tên bài + câu hỏi chính + nút của bài · chuỗi nhân quả (mắt xích đang học sáng) · thanh bước; menu trái thành menu trượt dưới 1600 px.
   const FULL = DS && meta.layout === 'full';
   if (FULL) root.classList.add('is-full');
+  // BA NÚT MODE trên sân khấu (chủ 26/11: "vào bài chọn mode cho trực quan hơn"): 2D · 3D · Thực tế, chỉ ở bài có meta.book và có trong READY của danh mục.
+  // Mode đang xem sáng; mode chưa có mờ, chạm thì báo "Sắp ra mắt". Bấm mode khác: đổi &mode= trên địa chỉ, giữ bước khi đổi giữa hai cách xem cùng hoạt động.
+  // Cụm nút nằm trong cảnh; kit/labui.js (zoomBox) đặt nó sát bên trái ô phóng to.
+  const Q = new URLSearchParams(location.search), READY_ = FULL && meta.book && READY[meta.book.code];
+  if (READY_) {
+    // mode đang xem THẬT: theo &mode= trên địa chỉ; không có thì là 3D (bài mở 3D khi không ghi mode), bài chưa có 3D thì mode đầu tiên của danh mục
+    const has = READY_.modes || [], ALL = ['2d', '3d', 'thuc-te'], cur = ALL.includes(Q.get('mode')) ? Q.get('mode') : has.includes('3d') ? '3d' : has[0];
+    els.modes = h('div', { class: 'lk-modes', role: 'group', 'aria-label': 'Chọn cách xem bài' }, [['2d', '2D'], ['3d', '3D'], ['thuc-te', 'Thực tế']].map(([m, label]) => {
+      const ok = has.includes(m), b = h('button', { type: 'button', class: (m === cur ? 'is-on' : '') + (ok ? '' : ' is-soon'), 'aria-pressed': String(m === cur), 'aria-disabled': ok ? null : 'true', title: ok ? (m === cur ? 'Đang xem' : 'Chuyển sang ' + label) : 'Sắp ra mắt' }, label);
+      b.addEventListener('click', () => {
+        if (!ok) { b.textContent = 'Sắp ra mắt'; clearTimeout(b._t); b._t = setTimeout(() => { b.textContent = label; }, 1600); return; }
+        if (m === cur) return;
+        const u = new URL(location.href);
+        u.searchParams.set('mode', m);
+        if (cur === 'thuc-te' || m === 'thuc-te') u.searchParams.delete('buoc');
+        else u.searchParams.set('buoc', String(state.step + 1));
+        location.href = u.toString();
+      });
+      return b;
+    }));
+    els.stage.append(els.modes); els.stage.classList.add('has-modes'); // tự đứng ở góc trên phải sân khấu; có ô phóng to (3D) thì labui.js dời vào sát bên trái ô đó
+  }
+  const startStep = () => { const b = Number(Q.get('buoc')); return READY_ && Number.isInteger(b) && b >= 1 && b <= steps.length ? b - 1 : state.step; }; // &buoc=N khi vừa đổi mode
   const top = (withScore) => h('header', { class: 'lk-top' },
     h('div', { class: 'lk-titlebar' }, FULL && h('button', { class: 'quiet icon-only lk-menu', type: 'button', 'aria-label': 'Mở menu', onclick: () => root.classList.add('menu-open') }, icon('menu')),
-      h('span', { class: 'lk-grade', text: meta.grade }), h('h1', { class: 'lk-title', text: meta.title }),
+      FULL && meta.book && h('a', { class: 'lk-back', href: `./bai_hoc.html?khoi=${(/CHEM(\d+)-/.exec(meta.book.code) || [])[1] || ''}`, title: 'Về danh sách bài học theo khối' }, '← Chọn bài khác'), // lối về trang chọn khối → chọn bài (bai_hoc.html), chỉ bài có meta.book (bản 3)
+      h('span', { class: 'lk-grade', text: FULL && meta.book ? `${meta.grade} · Chương ${meta.book.chapter} · Bài ${meta.book.lesson}` : meta.grade, // bài có khai meta.book (bản 3): ghi rõ khối, chương, bài
+        title: FULL && meta.book ? `${meta.book.series} · Chương ${meta.book.chapter}: ${meta.book.chapterTitle} · Bài ${meta.book.lesson}: ${meta.book.lessonTitle} · trang ${meta.book.pages} · mã ${meta.book.code}` : null }), h('h1', { class: 'lk-title', text: meta.title }),
       FULL && meta.mainQuestion ? h('span', { class: 'lk-mainq' }, h('b', { text: 'Câu hỏi chính' }), h('span', { text: meta.mainQuestion })) : h('span', { class: 'lk-eq', text: meta.equation }),
       FULL && els.actions, withScore && els.score),
     FULL ? [h('div', { class: 'lk-chainrow' }, h('span', { class: 'lk-chainlab', text: 'Chuỗi nhân quả' }), chain), els.rail] : [chain, els.rail]);
@@ -107,17 +133,23 @@ export function createShell(root, { meta, steps }) {
     }
     els.card.replaceChildren(...kids.filter(Boolean));
   }
+  const canEnter = (i) => !lesson?.canEnter || lesson.canEnter(i);
   function renderRail() {
-    [...els.rail.children].forEach((b, i) => { b.classList.toggle('is-on', i === state.step); b.classList.toggle('is-done', !!lesson && lesson.isDone(i)); if (i === state.step) b.scrollIntoView({ block: 'nearest', inline: 'center' }); });
+    [...els.rail.children].forEach((b, i) => { b.disabled = !canEnter(i); b.classList.toggle('is-on', i === state.step); b.classList.toggle('is-done', !!lesson && lesson.isDone(i)); if (i === state.step) b.scrollIntoView({ block: 'nearest', inline: 'center' }); });
     // Chuỗi nhân quả sáng theo bước: bước nào khai báo link (số thứ tự mắt xích, hoặc mảng) thì mắt xích đó sáng
     const on = [].concat(steps[state.step].link ?? []);
     chain.querySelectorAll('.lk-link').forEach((el, k) => el.classList.toggle('is-on', on.includes(k)));
     els.count.textContent = `Bước ${state.step + 1} / ${steps.length}`;
-    els.prev.disabled = state.step === 0; els.next.disabled = state.step === steps.length - 1;
+    els.prev.disabled = state.step === 0; els.next.disabled = state.step === steps.length - 1 || !canEnter(state.step + 1);
   }
   function go(i) {
-    if (i < 0 || i >= steps.length) return;
+    if (i < 0 || i >= steps.length || !canEnter(i)) return;
     state.step = i; save();
+    if (READY_ && Q.has('buoc')) {
+      const url = new URL(location.href);
+      url.searchParams.set('buoc', String(i + 1));
+      history.replaceState(history.state, '', url);
+    }
     els.panel.replaceChildren(); els.hud.replaceChildren(); els.overlay.hidden = true; els.overlay.replaceChildren();
     if (lesson) { lesson.enter(i); lesson.renderPanel(i, els.panel); }
     renderCard(); renderRail();
@@ -133,7 +165,12 @@ export function createShell(root, { meta, steps }) {
     refresh: () => { renderCard(); renderRail(); },
     rerenderPanel: () => { els.panel.replaceChildren(); lesson.renderPanel(state.step, els.panel); },
     setScore: (t) => { els.score.textContent = t; },
-    attach: (l) => { lesson = l; go(state.step); },
+    attach(l) {
+      lesson = l;
+      let i = startStep();
+      while (i > 0 && !canEnter(i)) i--;
+      go(i);
+    },
     full: FULL,
   };
   return shell;

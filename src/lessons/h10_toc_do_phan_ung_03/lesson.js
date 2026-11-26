@@ -20,7 +20,7 @@ const TOUR = DECL.benches.map((b) => b.id);
 
 export function createLesson(shell) {
   // Phòng mặc định là căn phòng ảnh thật khai trong giao_an.js (chủ 20/11: "Lấy làm mặc định"). Thêm &room=tron vào link để xem lại phòng trơn.
-  if (/[?&]room=tron(?![\w])/.test(location.search)) delete DECL.room;
+  if (/[?&]room=tron(?![\w])/.test(location.search)) delete (DECL.mode3d || DECL).room;
   // Kiểu thuỷ tinh: chủ 20/11 chốt "Kiểu E" làm mặc định (chai, lọ, bình, ống đong dùng ảnh dụng cụ của trang Thực hành, kit/glasslook.js).
   // Xem lại kiểu khác: &kinh=a (kính 3D cũ), b (ánh sáng viền), c (khúc xạ), d (b + c).
   { const k = /[?&]kinh=([a-e])(?![\w])/.exec(location.search), g = k ? k[1] : 'e'; if (g !== 'a') DECL.glass = g; }
@@ -172,10 +172,14 @@ export function createLesson(shell) {
     switch (i) {
       case 0: return ['Phòng có 4 bàn, mỗi bàn đổi đúng một thứ: nồng độ, nhiệt độ, bề mặt tiếp xúc, chất xúc tác. Bàn nào cũng có đủ dụng cụ của riêng nó: một bình đối chứng, một bình thí nghiệm, hoá chất và dụng cụ đo.', ['Bình đối chứng để so: nó chỉ khác bình thí nghiệm đúng một thứ.', 'Tivi trên tường sau chiếu mô hình phóng to tới mức hạt.'], 'các bước sau không biết đang đứng ở đâu trong phòng.'];
       case 1: {
-        // Viết từ lần chạy gần nhất. Bình thường: nửa lượng khí và thời gian thu được nó. Xi-lanh đầy: 100 mL và thời gian tới lúc đầy (không có "nửa lượng khí" để đọc).
-        const R = run3('vien', REF3.mass, REF3.vAcid), r = latest(1) || { tr: R.tHalf, vEnd: R.vEnd }, v = r.over ? r.vEnd : vHalf(r);
-        const extra = r.over ? ' Lần này xi-lanh đầy ở 100 mL nên chỉ tính được tới lúc đầy.' : r.slow ? ' Lần này hết giờ đo khí vẫn còn ra chậm, nên em tính trên nửa lượng khí đầu.' : r.left ? ' Lần này acid hết trước nên đá vôi còn thừa.' : '';
-        return [`Thu được ${fmt(v, 1)} mL khí trong ${fmt(r.tr, 1)} s, tức trung bình ${fmt(v / r.tr, 2)} mL mỗi giây. Tốc độ phản ứng = lượng chất biến đổi : thời gian.` + extra, ['Đo được nhờ hai dụng cụ: xi-lanh cho biết lượng khí, đồng hồ cho biết thời gian.', 'Càng về sau khí ra càng chậm, vì chất phản ứng vơi dần.'], 'chỉ nói được bình nào nhanh hơn, không nói được nhanh gấp mấy.'];
+        // HAI bình (chủ 25/11: "thiếu bình so sánh này"): đá vôi viên và đá vôi đập nhỏ, cùng 20 mL acid, cùng 0,30 g. Viết từ lần chạy gần nhất; chưa chạy thì nói rõ là số của mức bài.
+        // Bình thường: cùng nửa lượng khí, mỗi bình cần bao lâu, tốc độ trung bình mL/s của từng bình. Xi-lanh bình đập nhỏ đầy: tính trên 100 mL và thời gian tới lúc đầy.
+        const E = run3('vun', REF3.mass, REF3.vAcid), R = run3('vien', REF3.mass, REF3.vAcid), mine = latest(1);
+        const r = mine || { te: E.tHalf, tr: R.tHalf, vHalf: E.vEnd / 2 }, head = mine ? '' : `Ở mức của bài (mỗi bình ${g2(REF3.mass)} đá vôi · ${REF3.vAcid} mL acid), mô hình tính ra: `;
+        const extra = r.slow ? ' Lần này hết giờ đo mà bình đá viên vẫn còn ra khí chậm.' : r.left ? ' Lần này acid hết trước nên đá vôi còn thừa.' : '';
+        const main = r.over ? `Xi-lanh bình đá vôi đập nhỏ đầy 100 mL sau ${fmt(r.te, 1)} s, tức trung bình ${fmt(100 / r.te, 2)} mL mỗi giây; lần này không đọc được nửa lượng khí của bình đập nhỏ.`
+          : `Cùng thu ${fmt(vHalf(r), 1)} mL khí (nửa lượng khí): bình đá vôi đập nhỏ cần ${fmt(r.te, 1)} s, trung bình ${fmt(vHalf(r) / r.te, 2)} mL mỗi giây; bình đá vôi viên cần ${fmt(r.tr, 1)} s, chỉ ${fmt(vHalf(r) / r.tr, 2)} mL mỗi giây. Bình đập nhỏ nhanh gấp ${k(r.tr, r.te)} lần.`;
+        return [head + main + ' Tốc độ phản ứng = lượng chất biến đổi : thời gian.' + extra, ['Đo được nhờ hai dụng cụ: xi-lanh cho biết lượng khí, đồng hồ cho biết thời gian.', 'Càng về sau khí ra càng chậm, vì chất phản ứng vơi dần.'], 'chỉ nói được bình nào nhanh hơn, không nói được nhanh gấp mấy.'];
       }
       case 2: { const r = best(2, (x) => x.level.conc !== REF.conc, { te: tConc({ ...REF, conc: 0.3 }), tr: tConc(REF), cond: '0,30 M' }); return [`Bình thí nghiệm ${r.cond}: chữ X mất sau ${fmtT(r.te)}, bình đối chứng 0,05 M mất sau ${fmtT(r.tr)}, nhanh gấp ${k(r.tr, r.te)} lần. Nồng độ chất phản ứng càng lớn thì tốc độ phản ứng càng lớn.`, ['Chỉ đổi nồng độ, giữ nguyên nhiệt độ và lượng acid.', 'Với chất khí, tăng áp suất cũng là tăng nồng độ.'], 'không giải thích được vì sao ở bước 2 khí ra chậm dần.']; }
       case 3: { const r = best(3, (x) => x.level.temp !== REF.temp, { te: tTemp({ temp: 45 }), tr: tTemp(REF), cond: '45 °C' }); return [`Ống thí nghiệm ${r.cond}: hoá hồng sau ${fmtT(r.te)}, ống đối chứng 25 °C sau ${fmtT(r.tr)}, nhanh gấp ${k(r.tr, r.te)} lần. Nhiệt độ càng cao thì tốc độ phản ứng càng lớn.`, ['Hệ số Van\'t Hoff γ: tăng 10 °C thì nhanh gấp 2 đến 4 lần (mô hình này dùng γ = 2).', 'Không thêm chất nào: chỉ có hạt chuyển động nhanh hơn.'], 'tưởng muốn nhanh thì chỉ có cách pha đặc, không hiểu vì sao tủ lạnh giữ được thức ăn.']; }
@@ -238,8 +242,8 @@ export function createLesson(shell) {
     const b = steps[i].bench; if (!b || b === 'lens') return;
     if (!force && S.at[b] === i) return;
     S.at[b] = i;
-    if (b === 'surf') lab.solo('surf', i === 1 ? 'ref' : null); // bước Thước đo chỉ dùng một bình: nửa bàn còn lại được cất đi
-    if (i === 1) lab.preset('surf', [['vol', REF3.vAcid], ['fill'], ['mass', REF3.mass]]); else lab.reset(b); // bước Thước đo: đã đong 20 mL, rót và cân 0,30 g sẵn
+    if (b === 'surf') lab.solo('surf', null); // cả hai bình luôn có mặt, kể cả bước Thước đo (chủ 25/11: "thiếu bình so sánh này")
+    if (i === 1) lab.preset('surf', [['vol', REF3.vAcid], ['fill'], ['mass', REF3.mass]]); else lab.reset(b); // bước Thước đo: đã đong 20 mL mỗi bình, rót và cân 0,30 g mỗi đĩa sẵn
   }
 
   lensObj.set(lensSetup(lensK()));

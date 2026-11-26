@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thử tua lại · Bàn Bề mặt</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f6f6f1;color:#243331;font:16px/1.5 "Inter",system-ui,sans-serif}main{max-width:920px;margin:auto;padding:30px 24px}h1{font:clamp(30px,4vw,47px)/1.12 Georgia,serif;margin:8px 0}p{margin:6px 0 16px}.meta{color:#54635f;font-size:14px}.meterrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:24px;margin:22px 0 12px}.meterrow div{border-top:2px solid currentColor;padding-top:8px}.ref{color:#275495}.exp{color:#a44517}output{font-variant-numeric:tabular-nums}strong output{font-size:1.35em}meter{width:100%;height:20px}canvas{display:block;width:100%;height:260px;background:#fff}input{width:100%;accent-color:#255749}button{background:white;border:1px solid #a4b6ad;border-radius:6px;color:#18352c;padding:8px 12px;font:inherit;cursor:pointer}button:hover{background:#e8f0ea}.actions{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px}.axis{margin:16px 0 4px}a{color:#20564a}
+</style>
+<main>
+<p class="meta">Lab 1 · Bàn Bề mặt · Bản thử trình chiếu</p>
+<h1>Hai bình đạt nửa lượng khí lúc nào?</h1>
+<p>Cùng lượng đá vôi, một bình dùng đá viên và một bình dùng đá đập nhỏ. Kéo thời gian để đọc thể tích hai bình tại cùng một thời điểm.</p>
+<div class="meterrow"><div class="ref">Đá viên · đường liền<br><strong><output id="ref"></output></strong><meter id="refBar" min="0" max="100" aria-label="Thể tích khí của đá viên"></meter></div>
+<div class="exp">Đá đập nhỏ · đường đứt<br><strong><output id="exp"></output></strong><meter id="expBar" min="0" max="100" aria-label="Thể tích khí của đá đập nhỏ"></meter></div></div>
+<p class="meta axis">Thể tích CO₂ (mL) theo thời gian mô hình (giây)</p>
+<canvas id="plot" role="img" aria-label="Hai đường thể tích theo thời gian. Vạch đứng đánh dấu thời điểm đang đọc."></canvas>
+<label for="time">Thời điểm đang xem · <output id="clock"></output></label>
+<input id="time" type="range" min="0" step="any" value="0">
+<div class="actions"><button id="play">Phát</button><button id="start">Về đầu</button><button id="halfExp">Đá đập nhỏ đạt ½</button><button id="halfRef">Đá viên đạt ½</button><button id="end">Cuối lượt</button></div>
+<p class="meta">Lượt mẫu tính từ mô hình hiện có của Lab 1. Thời gian và tốc độ phản ứng mang tính minh họa.</p>
+</main>
+<script type="module">
+import {REF3,run3,gasAt3,surfWindow,FULL} from '../src/lessons/h10_toc_do_phan_ung_03/model3.js';
+const el = id => document.getElementById(id);
+const ref = run3('vien',REF3.mass,REF3.vAcid), exp = run3('vun',REF3.mass,REF3.vAcid);
+const duration = surfWindow([ref,exp]), slider = el('time'), canvas = el('plot');
+const fmt = new Intl.NumberFormat('vi-VN',{minimumFractionDigits:1,maximumFractionDigits:1});
+let time = 0, frame = 0, last = 0;
+slider.max = duration;
+function paint(){
+  const ctx = canvas.getContext('2d'), w = canvas.clientWidth, h = canvas.clientHeight, dpr = devicePixelRatio || 1;
+  if(canvas.width !== Math.round(w*dpr) || canvas.height !== Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+  const x=t=>42+(w-66)*t/duration, y=v=>h-32-(h-52)*v/FULL;
+  ctx.font='13px system-ui';ctx.fillStyle='#344d43';ctx.lineWidth=1;
+  for(const v of [0,25,50,75,100]){
+    ctx.strokeStyle='#d4ded9';ctx.beginPath();ctx.moveTo(x(0),y(v));ctx.lineTo(x(duration),y(v));ctx.stroke();ctx.fillText(v,6,y(v)+4);
+  }
+  for(let i=0;i<=4;i++){const t=duration*i/4;ctx.fillText(Math.round(t),x(t)-8,h-10);}
+  ctx.strokeStyle='#666';ctx.beginPath();ctx.moveTo(x(time),y(FULL));ctx.lineTo(x(time),y(0));ctx.stroke();
+  for(const [run,color,dash] of [[ref,'#275495',[]],[exp,'#a44517',[6,4]]]){
+    ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2.5;ctx.setLineDash(dash);ctx.beginPath();
+    for(let i=0;i<=300;i++){const t=duration*i/300;const yy=y(gasAt3(run,t));if(i===0)ctx.moveTo(x(t),yy);else ctx.lineTo(x(t),yy);}
+    ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.arc(x(time),y(gasAt3(run,time)),4,0,2*Math.PI);ctx.fill();
+  }
+}
+function seek(t){
+  time=Math.max(0,Math.min(duration,t));slider.value=time;el('clock').value=fmt.format(time)+' s';
+  for(const [id,run] of [['ref',ref],['exp',exp]]){
+    const v=gasAt3(run,time);el(id).value=fmt.format(v)+' mL';el(id+'Bar').value=v;
+  }
+  paint();
+}
+function pause(){cancelAnimationFrame(frame);frame=0;el('play').textContent='Phát';}
+function advance(now){seek(time+(now-last)/1000*duration/8.5);last=now;if(time>=duration)pause();else frame=requestAnimationFrame(advance);}
+el('play').onclick=()=>{if(frame){pause();return;}if(time>=duration)seek(0);last=performance.now();el('play').textContent='Dừng';frame=requestAnimationFrame(advance);};
+for(const [id,t] of [['start',0],['halfRef',ref.tHalf],['halfExp',exp.tHalf],['end',duration]])el(id).onclick=()=>{pause();seek(t);};
+slider.oninput=()=>{pause();seek(Number(slider.value));};
+addEventListener('resize',paint);seek(0);
+</script>
+</html>

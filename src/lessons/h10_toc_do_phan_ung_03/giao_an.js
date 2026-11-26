@@ -5,8 +5,6 @@
 //   Lượng chất (mL, gam) ở bàn 3 và bàn 4 do học sinh TỰ CHỌN con số (kéo thanh hoặc nhập số), chỉ bị chặn bởi sức chứa của dụng cụ, và áp CHUNG cho cả hai bình.
 //   Lần đầu lấy mức của bài (REF3). Chọn quá tay thì bàn vẫn chạy và hiện đúng hậu quả (acid hết trước, xi-lanh đầy).
 // Dữ kiện và nguồn: facts.md cùng thư mục. Chưa có giáo viên duyệt.
-import { makeSolid } from '../../kit/labware.js';
-import { makeChemSolid } from '../../kit/labware2.js';
 import { fmt } from '../../shell/shell.js';
 import { REF, CONC, tConc, tTemp, tCat, kCat, lensSetup } from '../h10_toc_do_phan_ung_02/model2.js';
 import { REF3, RANGE3, FULL, TEMPS, WINDOW_CAT, run3, gasAt3, rateAt3, gasO2, tFullO2, limit3, surfWindow, surfState } from './model3.js';
@@ -19,15 +17,17 @@ export const g2 = (m) => fmt(m, 2) + ' g';
 const STONE = 0x8d8676;
 const R0 = rateAt3(run3('vun', REF3.mass, REF3.vAcid), 1);
 // Mặt số đồng hồ trên bàn chỉ đổi tối đa khoảng 5 lần mỗi giây (đổi ở mọi khung hình thì số nhảy loạn, nhìn như nháy); lần cuối luôn hiện đúng số chốt.
-const setT = (B, t, last = false) => { const now = performance.now(); if (!last && B._tAt && now - B._tAt < 190) return; B._tAt = now; B.items.timer.obj.userData.setTime(t); };
+const setT = (B, t, last = false) => { const now = performance.now(); if (!last && B._tAt && now - B._tAt < 190) return; B._tAt = now; B.clock(t); };
 // Nhãn ống đong: đang chứa bao nhiêu, và đó là mấy phần bằng nhau (để không lẫn tổng với lượng của mỗi bình)
-const cylTag = (B, what, per) => { const mL = Math.round(B.items.cyl.obj.userData.mL || 0), n = B.solo ? 1 : 2; return `Ống đong · ${mL} mL ${what}` + (mL > 0 && n > 1 && mL === n * per ? ` (${n} bình × ${per} mL)` : ''); };
+const cylTag = (B, what, per) => { const mL = Math.round(B.read('cyl')), n = B.solo ? 1 : 2; return `Ống đong · ${mL} mL ${what}` + (mL > 0 && n > 1 && mL === n * per ? ` (${n} bình × ${per} mL)` : ''); };
 // Bình tam giác: mực chất lỏng theo thể tích rót vào (5 mL thấp, 50 mL cao nhất)
 const fillOf = (mL) => 0.35 + 0.65 * clamp((mL - 5) / 45);
 
 export const meta = {
   id: 'h10_toc_do_phan_ung_03',
   grade: 'Hoá 10',
+  // Bài này thuộc đâu trong sách (chủ 25/11: "phải ghi rõ ra nó thuộc khối nào, bài nào"), theo danh mục STEMLabs catalog/hoa-hoc.csv
+  book: { code: 'CHEM10-04', series: 'Kết nối tri thức', chapter: 6, chapterTitle: 'Tốc độ phản ứng', lesson: 19, lessonTitle: 'Tốc độ phản ứng', pages: '95–99' },
   title: 'Tốc độ phản ứng: nhanh hay chậm do đâu?',
   equation: 'tốc độ = lượng chất biến đổi : thời gian',
   layout: 'full',
@@ -46,8 +46,8 @@ export const steps = [
   { short: 'Xem cả phòng', bench: null, link: [0, 1, 2, 3],
     q: 'Bột mì nằm trong bao thì không sao, bụi bột mì bay lơ lửng gặp tia lửa lại có thể nổ. Cùng một chất, sao lúc chậm lúc nhanh?',
     todo: 'Kéo để xoay nhìn quanh phòng, hoặc chạm vào một bàn để tới gần xem bàn đó có gì.' },
-  { short: 'Thước đo', bench: 'surf', link: 0, q: 'Nhìn bình sủi bọt, làm sao nói được nó nhanh hay chậm bằng một con số?',
-    todo: 'Bước này chỉ dùng MỘT bình. Bàn đã đong sẵn 20 mL acid và cân sẵn 0,30 g đá vôi. Chạm vào bình (hoặc bấm nút số 4) để thả đá vôi, rồi nhìn pit-tông của xi-lanh, số mL khí và đồng hồ.' },
+  { short: 'Thước đo', bench: 'surf', link: 0, q: 'Hai bình cùng sủi bọt: một bình đá vôi viên, một bình đá vôi đập nhỏ. Làm sao nói được bình nào nhanh hơn, nhanh gấp mấy lần, bằng con số?',
+    todo: 'Bàn đã đong sẵn 20 mL acid mỗi bình và cân sẵn 0,30 g đá vôi mỗi đĩa: bình trái đá vôi viên, bình phải đá vôi đập nhỏ. Chạm vào bình (hoặc bấm nút số 4) để thả đá vôi vào cả hai bình, rồi nhìn hai pit-tông, số mL khí và đồng hồ.' },
   { short: 'Nồng độ', bench: 'conc', link: 1, q: 'Hai bình giống hệt nhau. Rót vào bình bên phải dung dịch đặc hơn thì chữ X mất sớm hơn hay muộn hơn?',
     todo: 'Làm đủ một vòng: rót, chọn lọ đặc hơn cho bình thí nghiệm, rót acid, đọc đồng hồ, rửa bình. Làm 2 lần với 2 lọ khác nhau (0,10 M và 0,30 M).' },
   { short: 'Nhiệt độ', bench: 'temp', link: 1, q: 'Không thêm chất nào, chỉ đun nóng ống bên phải thì nó hoá hồng sớm hơn bao nhiêu?',
@@ -89,20 +89,23 @@ const RANGE = {
 const gasTag = (v) => (v >= FULL ? 'khí 100 mL, xi-lanh ĐẦY' : `khí ${fmt(v, 1)} mL`);
 
 export const lab = {
-  // Căn phòng: ảnh phòng lab thật trên bốn bức tường (bộ ảnh của bản 1), mặt bàn đen như bàn phòng lab; tường tối đi khi áp sát một bàn (dim) để dụng cụ nổi lên.
-  // Ảnh tường lấy ở assets/env_v3/: như bộ ảnh của bản 1 nhưng tường sau đã bỏ kệ chai lọ cho gọn (chủ 20/11: "gọn hơn xíu, bỏ vài cái dư thừa").
-  room: { photo: './assets/env_v3/', top: 0x1b1e21, dim: 0.72 },
-  // Đồ tạo không khí: chỉ đặt quanh phòng, không chạm được, không nằm trên bàn thí nghiệm. at = [x, z] trên sàn.
-  props: [
-    // Vị trí chọn sao cho KHÔNG món nào lọt vào sau lưng dụng cụ ở bốn khung cận: cây treo áo và xe đẩy ở hai góc xa của tường sau,
-    // hai ghế đẩu đứng ở lối giữa, cạnh hai bàn hàng trước (toàn cảnh thấy ghế; bốn khung cận và khung tivi đều không chiếu tới).
-    { kind: 'stool', at: [-2.2, 5.2], opts: { color: 0x4b5563 } }, { kind: 'stool', at: [2.3, 4.6], opts: { color: 0x4b5563 } },
-    { kind: 'coatstand', at: [-22.0, -17.6], ry: 0.5 }, // lùi sát góc trái: ở khung chuẩn của bàn 1 cây treo áo không còn đứng thẳng sau lọ hoá chất
-    { kind: 'trolley', at: [18.6, -17.2], ry: -0.2 },
-  ],
-  // 20/11 khuya, chủ: "cho khoảng cách các bàn cách nhau xa hơn 1 xíu": tâm bàn (±9,0; ±5,9) thay cho (±7,7; ±4,8)
-  // Bốn bàn kéo giãn ra bốn phía (không sát hẳn góc phòng, để ở toàn cảnh mỗi bàn còn đủ to); giữa phòng trống, nhìn thẳng tới tivi trên tường sau
-  overview: { target: [0, 2.7, -2.5], w: 31.0, h: 22.4, el: 22, az: 0, fov: 40, maxDist: 80, cy: 0.5 }, // máy quay thấp hơn trước để thấy trọn tivi trên tường sau
+  // Phần chỉ có nghĩa ở 3D (kit/labset.js đọc lab.mode3d): căn phòng, đồ tạo không khí, khung toàn cảnh. view của bàn và at của món vẫn nằm ở chỗ cũ.
+  mode3d: {
+    // Căn phòng: ảnh phòng lab thật trên bốn bức tường (bộ ảnh của bản 1), mặt bàn đen như bàn phòng lab; tường tối đi khi áp sát một bàn (dim) để dụng cụ nổi lên.
+    // Ảnh tường lấy ở assets/env_v3/: như bộ ảnh của bản 1 nhưng tường sau đã bỏ kệ chai lọ cho gọn (chủ 20/11: "gọn hơn xíu, bỏ vài cái dư thừa").
+    room: { photo: './assets/env_v3/', top: 0x1b1e21, dim: 0.72 },
+    // Đồ tạo không khí: chỉ đặt quanh phòng, không chạm được, không nằm trên bàn thí nghiệm. at = [x, z] trên sàn.
+    props: [
+      // Vị trí chọn sao cho KHÔNG món nào lọt vào sau lưng dụng cụ ở bốn khung cận: cây treo áo và xe đẩy ở hai góc xa của tường sau,
+      // hai ghế đẩu đứng ở lối giữa, cạnh hai bàn hàng trước (toàn cảnh thấy ghế; bốn khung cận và khung tivi đều không chiếu tới).
+      { kind: 'stool', at: [-2.2, 5.2], opts: { color: 0x4b5563 } }, { kind: 'stool', at: [2.3, 4.6], opts: { color: 0x4b5563 } },
+      { kind: 'coatstand', at: [-22.0, -17.6], ry: 0.5 }, // lùi sát góc trái: ở khung chuẩn của bàn 1 cây treo áo không còn đứng thẳng sau lọ hoá chất
+      { kind: 'trolley', at: [18.6, -17.2], ry: -0.2 },
+    ],
+    // 20/11 khuya, chủ: "cho khoảng cách các bàn cách nhau xa hơn 1 xíu": tâm bàn (±9,0; ±5,9) thay cho (±7,7; ±4,8)
+    // Bốn bàn kéo giãn ra bốn phía (không sát hẳn góc phòng, để ở toàn cảnh mỗi bàn còn đủ to); giữa phòng trống, nhìn thẳng tới tivi trên tường sau
+    overview: { target: [0, 2.7, -2.5], w: 31.0, h: 22.4, el: 22, az: 0, fov: 40, maxDist: 80, cy: 0.5 }, // máy quay thấp hơn trước để thấy trọn tivi trên tường sau
+  },
   benches: [
     // ---------- Bàn 1 · Nồng độ: Na₂S₂O₃ + H₂SO₄ trên giấy chữ X ----------
     { id: 'conc', name: 'Bàn 1 · Nồng độ', short: 'Nồng độ', color: '#087b91', at: [-9.0, -5.9], ref: { conc: REF.conc, temp: REF.temp },
@@ -176,7 +179,7 @@ export const lab = {
         { id: 'temp', role: 'choose', var: 'temp', repeat: true, label: 'Đun ống thí nghiệm bằng đèn cồn tới', verb: 'heat', item: 'lamp', thermo: 'thExp',
           options: TEMPS.map((t) => ({ v: t, label: t + ' °C' })), show: (B, t) => B.tag('exp', `Thí nghiệm · ${Math.round(t)} °C`) },
         { id: 'go', role: 'start', label: 'Thả dây Mg vào cả hai ống (đồng hồ chạy)', verb: 'drop', item: 'mg', pieces: [['mg', 'ref'], ['mg', 'exp']],
-          make: () => { const m = makeChemSolid('Mg'); m.scale.setScalar(0.36); m.rotation.z = 1.25; return m; } },
+          solid: { chem: 'Mg', scale: 0.36, rot: { z: 1.25 } } },
       ],
       rinse: { sink: 'sink', wash: 'wash', label: 'Rửa ở vòi, tráng nước cất, làm lại' },
       cols: ['Ống thí nghiệm', 'Hoá hồng sau', 'Đối chứng', 'Nhanh gấp'],
@@ -222,7 +225,7 @@ export const lab = {
         { id: 'fill', role: 'prepare', label: 'Rót từ ống đong vào bình, chia đều', verb: 'pour', item: 'cyl', into: ['ref', 'exp'], front: true, drain: true, fill: (B) => [0, fillOf(B.level.vAcid)] },
         { id: 'mass', role: 'choose', var: 'mass', repeat: true, label: 'Cân đá vôi: tự chọn số gam', verb: 'weigh', item: 'scale', dishes: ['dRef', 'dExp'], range: RANGE.mass },
         { id: 'go', role: 'start', label: 'Thả đá vôi vào bình, đậy nút', verb: 'drop', items: ['ref', 'exp', 'dRef', 'dExp'], ring: ['ref', 'exp'], rigs: ['rigRef', 'rigExp'],
-          pieces: [['dRef', 'ref', 'vien'], ['dExp', 'exp', 'vun']], make: (form, B) => makeSolid(form, { size: 0.95 * Math.min(1.3, Math.cbrt(B.level.mass / REF3.mass)), color: STONE }) },
+          pieces: [['dRef', 'ref', 'vien'], ['dExp', 'exp', 'vun']], solid: { color: STONE, size: (B) => 0.95 * Math.min(1.3, Math.cbrt(B.level.mass / REF3.mass)) } },
       ],
       rinse: { sink: 'sink', wash: 'wash', rigs: ['rigRef', 'rigExp'], label: 'Rửa ở vòi, tráng nước cất, làm lại' },
       cols: ['Lượng mỗi bình', 'Đập nhỏ: nửa khí sau', 'Viên', 'Nhanh gấp'],
@@ -250,7 +253,7 @@ export const lab = {
           [['ref', r, 'rigRef'], ['exp', e, 'rigExp']].forEach(([k, run, rig]) => {
             if (B.solo && k !== B.solo) return;
             const vol = gasAt3(run, t), v = B.vessel[k], left = 1 - vol / run.vMax;
-            B.items[rig].obj.userData.setVolume(vol); v.solids.visible = left > 0.004; v.solids.scale.setScalar(Math.max(0.08, Math.cbrt(Math.max(left, 0)))); v.bubbles = clamp(rateAt3(run, t) / R0);
+            B.gas(rig, vol); v.solid(left); v.bubbles = clamp(rateAt3(run, t) / R0);
           });
           const w = this.window(B); setT(B, Math.min(t, w), t >= w); this.show(B);
           return { done: t >= w };
@@ -263,7 +266,7 @@ export const lab = {
             : { ...base, solo: true, left, slow: sr.state === 'slow', te: r.tHalf, tr: r.tHalf, vEnd: sr.v, vHalf: r.vEnd / 2, exp: '(không dùng)', ref: fmtT(r.tHalf), ratio: '–' };
           if (se.state === 'full') { const tr = sr.state === 'full' ? sr.at : null; // bình viên chưa đầy trong cửa sổ đo thì ghi số mL đọc được, không ghi thời gian chưa từng hiện trên đồng hồ
             return { ...base, over: true, te: se.at, tr: tr || se.at, vEnd: FULL, vRef: sr.v, exp: `đầy sau ${fmtT(se.at)}`, ref: tr ? `đầy sau ${fmtT(tr)}` : `${fmt(sr.v, 1)} mL sau ${fmt(w, 0)} s`, ratio: tr ? fmt(tr / se.at, 1) + ' lần' : '–' }; }
-          return { ...base, left, slow: se.state === 'slow' || sr.state === 'slow', te: e.tHalf, tr: r.tHalf, vEnd: se.v, vRef: sr.v, exp: fmtT(e.tHalf), ref: fmtT(r.tHalf), ratio: fmt(r.tHalf / e.tHalf, 1) + ' lần' };
+          return { ...base, left, slow: se.state === 'slow' || sr.state === 'slow', te: e.tHalf, tr: r.tHalf, vEnd: se.v, vHalf: e.vEnd / 2, vRef: sr.v, exp: fmtT(e.tHalf), ref: fmtT(r.tHalf), ratio: fmt(r.tHalf / e.tHalf, 1) + ' lần' };
         },
         series(B) { const [e, r] = this.runs(B); return B.solo ? [{ run: r, color: '#475569', label: 'đá vôi viên' }] : [{ run: r, color: '#475569', label: 'viên' }, { run: e, color: '#6254f4', label: 'đập nhỏ' }]; },
         read(B) {
@@ -313,7 +316,7 @@ export const lab = {
         },
         frame(B, t) {
           const [ve, vr] = this.vols(B, t), k = kCat({ cat: true });
-          B.items.rigExp.obj.userData.setVolume(ve); B.items.rigRef.obj.userData.setVolume(vr);
+          B.gas('rigExp', ve); B.gas('rigRef', vr);
           B.vessel.exp.bubbles = clamp(Math.exp(-k * t) * 1.05); B.vessel.ref.bubbles = 0.03;
           setT(B, Math.min(t, WINDOW_CAT), t >= WINDOW_CAT); this.show(B);
           return { done: t >= WINDOW_CAT };

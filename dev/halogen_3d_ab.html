@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halogen · So sánh bàn 3D</title>
+<link rel="stylesheet" href="./halogen_3d_ab.css">
+<script type="importmap">{"imports":{"three":"../vendor/three/three.module.min.js","three/addons/":"../vendor/three/addons/"}}</script>
+<header><div><span class="mark" aria-hidden="true">⬡</span> Lab Khoa Học <i>/</i> <small>So sánh bàn 3D</small></div>
+<nav aria-label="Chọn bản 3D"><a class="lesson-link" href="../index.html?bai=CHEM10-05&amp;mode=3d&amp;buoc=3">Mở trong bài Halogen ↗</a><button id="showA" aria-pressed="false">A · Phòng lab</button><button id="showB" aria-pressed="true">B · Cụm dụng cụ</button></nav></header>
+<section id="versionA" hidden><iframe title="Bản A · Bài Halogen bước 3"></iframe></section>
+<main id="versionB">
+<div class="heading"><div><small>HÓA 10 &nbsp;/&nbsp; NHÓM HALOGEN</small><h1>Chlorine gặp bromide</h1></div><button id="reset">↺ &nbsp; Làm lại</button></div>
+<div class="layout"><section class="board" aria-label="Bàn thí nghiệm tương tác">
+<div class="bar"><div class="mode" role="group" aria-label="Điều khiển trên mô hình"><button id="actionMode" aria-pressed="true">Thao tác</button><button id="orbitMode" aria-pressed="false">Xoay 3D</button></div><div><button id="labels" aria-pressed="true">Nhãn</button><button id="camera">Góc ban đầu</button></div></div>
+<div id="scene"><canvas aria-label="Mô hình 3D của hai lọ nhỏ giọt và hai ống nghiệm"></canvas><div id="anchors"></div></div>
+<div class="foot" id="gestureHint">Kéo lọ tới ống. Giữ chuột phải để xoay từ bất kỳ vị trí nào. Cuộn để phóng.</div>
+</section>
+<aside><h2>Thao tác</h2><p>Hai ống đã có sẵn 2 mL dung dịch sodium bromide. Dùng nước cất cho ống đối chứng và nước chlorine cho ống thí nghiệm, với cùng số giọt.</p>
+<fieldset><legend>Chọn lọ</legend><div class="pair"><button data-source="Cl2" aria-pressed="true">Nước chlorine</button><button data-source="H2O" aria-pressed="false">Nước cất</button></div></fieldset>
+<label for="dose" class="dose">Số giọt mỗi lần <output id="amount">20</output></label><input type="range" id="dose" min="1" max="40" value="20">
+<fieldset><legend>Nhỏ vào ống</legend><div class="pair"><button data-target="ref">Đối chứng</button><button data-target="exp">Thí nghiệm</button></div></fieldset>
+<h2 class="observed">Quan sát</h2><dl><div><dt>Đối chứng</dt><dd id="refValue"></dd></div><div><dt>Thí nghiệm</dt><dd id="expValue"></dd></div></dl>
+<p id="status" role="status"></p>
+</aside></div></main>
+<script type="module" src="./halogen_3d_ab.js"></script>
+</html>

@@ -102,12 +102,12 @@ export function bindSafeArea(shell, stage, bottom = () => 0) {
     const e = zoomed ? last.b : px ? Math.min(0.26, Math.ceil(((px + 22) / el.clientHeight) * 25) / 25) : 0.03; // làm tròn lên theo nấc 4%: thẻ ở đáy đổi cao vài điểm ảnh thì khung hình không nhúc nhích
     // Lề bên cạnh bảng nổi: SIDE điểm ảnh (tay nắm thu gọn thò ra 13 px + khoảng thở), để món ở mép bàn (lọ hoá chất phải chạm đầu tiên) không nằm sát hay chui dưới bảng.
     // Đỉnh: dải TOP điểm ảnh dành cho cụm zoom và dòng báo; nhãn dụng cụ không lên dải này.
-    const side = SIDE / s.width;
+    const side = SIDE / s.width, TOP = !wide.matches && el.classList.contains('has-modes') ? (el.clientWidth < 360 ? 96 : 58) : TOP0; // màn hẹp có nút mode: nhãn dụng cụ đứng dưới cụm nút (màn rất hẹp thì nút xuống hàng, nhường thêm chỗ)
     last = { l: l ? l + side : 0, r: r ? r + side : 0, t: Math.max(0.07, TOP / el.clientHeight), b: e };
     stage.insets = last; // kit/labset.js đọc để xếp nhãn dụng cụ trong đúng phần cảnh không bị che
     stage.setInsets(last);
   }
-  const SIDE = 28, TOP = 48;
+  const SIDE = 28, TOP0 = 48;
   let last = { l: 0, r: 0, t: 0, b: 0 }; sync.insets = () => ({ ...last }); // vùng an toàn hiện tại, để cắt ảnh chụp cảnh cho đúng phần không bị thẻ che
   const ro = new ResizeObserver(sync); [el, shell.els.card, shell.els.panel].forEach((x) => ro.observe(x));
   wide.addEventListener('change', sync); cols.addEventListener('change', sync);
@@ -133,7 +133,7 @@ export function tuckHandles(shell, onChange = () => {}) {
 // bấm vào con số thì về khung chuẩn. Cuộn chuột phóng vào đúng chỗ con trỏ; Shift + kéo (hoặc kéo chuột phải, hai ngón) để dời khung.
 export function zoomBox(lab, host) {
   const pct = h('button', { class: 'lk-zm-pct', type: 'button', title: 'Về khung chuẩn (100%)', 'aria-label': 'Mức phóng, bấm để về khung chuẩn', onclick: () => lab.zoomReset() }, '100%');
-  const box = h('div', { class: 'lk-zm', role: 'group', 'aria-label': 'Phóng to, thu nhỏ', title: 'Cuộn chuột: phóng vào chỗ con trỏ · Shift + kéo: dời khung' },
+  const box = h('div', { class: 'lk-zm', role: 'group', 'aria-label': 'Phóng to, thu nhỏ' },
     h('button', { type: 'button', 'aria-label': 'Thu nhỏ', title: 'Thu nhỏ', onclick: () => lab.zoomBy(1 / 1.35) }, '−'), pct,
     h('button', { type: 'button', 'aria-label': 'Phóng to', title: 'Phóng to', onclick: () => lab.zoomBy(1.35) }, '+'));
   const hint = h('span', { class: 'lk-zm-hint' }); // kéo chuột lúc này làm gì: đổi theo mức zoom
@@ -141,16 +141,19 @@ export function zoomBox(lab, host) {
   // Nút "Về góc chuẩn" do bài học tạo sẵn trong cảnh (lớp lk-reset): chỉ dời nó vào cụm, bài học vẫn tự bật tắt như cũ. Dưới 900 px cụm không có khung riêng (display: contents), ba món nằm như trước.
   const bar = h('div', { class: 'lk-zmbar' }, hint, box), reset = host.querySelector('.lk-reset');
   if (reset) { reset.title = 'Về khung chuẩn của bàn đang xem'; bar.insertBefore(reset, box); }
+  const modes = host.querySelector('.lk-modes'); if (modes) bar.insertBefore(modes, box); // ba nút mode (shell.js dựng, tự đứng góc phải khi không có ô phóng to) dời vào sát bên trái ô phóng to
   host.append(bar);
-  const sizeBar = () => host.style.setProperty('--zmbar-w', bar.offsetWidth + 'px'); // dòng báo ở đỉnh cảnh chừa đúng bề ngang của cụm
+  const sizeBar = () => { host.style.setProperty('--zmbar-w', bar.offsetWidth + 'px'); host.style.setProperty('--zm-w', box.offsetWidth + 'px'); }; // dòng báo ở đỉnh cảnh chừa đúng bề ngang của cụm
   new ResizeObserver(sizeBar).observe(bar); sizeBar();
   let shown = '', mode = '';
   lab.stage.onFrame(() => {
-    const t = lab.zoomPct() + '%'; if (t !== shown) { shown = t; pct.textContent = t; }
+    const zoom = lab.zoomPct(), t = zoom + '%'; if (t !== shown) { shown = t; pct.textContent = t; }
     const m = lab.dragMode(); if (m !== mode) {
       mode = m; hint.textContent = m === 'pan' ? 'Kéo để dời khung · Shift + kéo để xoay' : 'Kéo để xoay · cuộn để phóng to';
-      host.classList.toggle('is-zoomed', m === 'pan'); // đã phóng từ 130%: thẻ phương trình ở đáy thu thành một dòng (shell_ds.css), trả chỗ cho dụng cụ
+      box.title = hint.textContent;
     }
+    if (zoom >= 130) host.classList.add('is-zoomed');
+    else if (zoom <= 110) host.classList.remove('is-zoomed');
   });
   host.addEventListener('selectstart', (e) => e.preventDefault()); // kéo xoay cảnh không bôi đen chữ ở hai bảng bên cạnh
   return box;

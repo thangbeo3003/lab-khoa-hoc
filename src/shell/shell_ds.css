@@ -380,3 +380,199 @@ html[data-ui="ds"] { --card:#fff; --good:#14624f; --good-soft:#e6f4ea; --bad:#b4
 .ds.is-v3 .lk-panel .lk-table td:not(:first-child) { white-space:nowrap; } /* con số và đơn vị không tách dòng ("68,8 mL") */
 .ds.is-v3 .lk-panel .lk-table tbody tr:nth-child(even) td { background:#f8f8fd; }
 
+
+/* Lối "← Chọn bài khác" về trang chọn khối → chọn bài (bai_hoc.html), 25/11. Chỉ có ở bài khai meta.book (bản 3). */
+.ds.is-full .lk-back { flex:none; display:inline-flex; align-items:center; min-height:32px; padding:0 12px; border:1px solid var(--border); border-radius:999px; background:var(--surface); color:var(--accent-ink); font-size:12.5px; font-weight:600; text-decoration:none; white-space:nowrap; }
+.ds.is-full .lk-back:hover { border-color:var(--accent-border); background:var(--accent-soft); }
+
+/* Ba nút mode 2D · 3D · Thực tế trên sân khấu, cùng kiểu ô phóng to (26/11). shell.js dựng, labui.js đặt sát bên trái ô phóng to. Chỉ có ở bài khai meta.book. */
+.ds.is-v3 .lk-modes { display:flex; background:rgba(23,24,45,.86); border-radius:10px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,.25); }
+.ds.is-v3 .lk-modes button { all:unset; cursor:pointer; color:#f2f5f9; font:700 12.5px/1 inherit; padding:9px 12px; min-width:26px; text-align:center; white-space:nowrap; }
+.ds.is-v3 .lk-modes button + button { border-left:1px solid rgba(255,255,255,.16); }
+.ds.is-v3 .lk-modes button:hover:not(.is-on):not(.is-soon) { background:rgba(255,255,255,.12); }
+.ds.is-v3 .lk-modes button:focus-visible { outline:2px solid var(--spark, #c1ff24); outline-offset:-2px; }
+.ds.is-v3 .lk-modes button.is-on { background:var(--spark, #c1ff24); color:#102839; cursor:default; }
+.ds.is-v3 .lk-modes button.is-soon { color:rgba(242,245,249,.42); cursor:not-allowed; }
+/* không có ô phóng to (mode 2D, Thực tế): cụm tự đứng đúng chỗ ô phóng to vẫn đứng */
+.ds.is-v3 .lk-stage > .lk-modes { position:absolute; z-index:6; top:10px; right:calc(var(--safe-r, 0%) + 28px); }
+@media (min-width:900px) { .ds.is-v3 .lk-zmbar .lk-modes { position:static; } }
+@media (max-width:899px) {
+  /* màn hẹp: cụm ô phóng to không có khung riêng; nút mode đứng cùng hàng, bên trái ô phóng to; hết chỗ thì xuống hàng ngay dưới */
+  .ds.is-v3 .lk-zmbar .lk-modes { position:absolute; z-index:5; top:14px; right:calc(16px + var(--zm-w, 150px) + 8px); }
+  .ds.is-v3 .lk-stage > .lk-modes { top:14px; right:16px; }
+  .ds.is-v3 .lk-modes button { padding:8px 9px; }
+  .ds.is-v3 .lk-stage.has-modes .lk-zm-hint { display:none; } /* điện thoại: lời nhắc kéo chuột nhường chỗ cho nút mode, không đè nhãn dụng cụ */
+  .ds.is-v3 .lk-stage.has-modes .lk-eqcard { top:60px; } /* điện thoại: thẻ phương trình (ở đỉnh cảnh) đứng dưới hàng nút mode, không bị nút đè */
+}
+@media (max-width:359px) {
+  .ds.is-v3 .lk-zmbar .lk-modes { top:52px; right:16px; }
+  .ds.is-v3 .lk-stage.has-modes .lk-eqcard { top:98px; }
+}
+
+.lk .is-part.is-held { background: #064e51; color: #fff; outline: 2px solid #77dfce; outline-offset: 2px; }
+
+.hg-compare { box-sizing:border-box; width:min(540px,94vw); max-height:90vh; overflow:auto; border:1px solid #afc4c4; border-radius:16px; padding:18px; background:#fff; color:#193840; font:16px/1.4 system-ui,sans-serif; box-shadow:0 14px 64px #0e25394d; }
+.hg-compare::backdrop { background:#10252e77; }
+.hg-compare header,.hg-compare figcaption { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.hg-compare h2 { font-size:21px; margin:0; }
+.hg-compare button,.hg-compare select { border:1px solid #9aafb0; border-radius:7px; background:#fff; color:#193840; padding:5px 9px; font:inherit; cursor:pointer; }
+.hg-pair { display:grid; grid-template-columns:1fr 1fr; margin-top:15px; gap:2px; }
+.hg-pair figure { min-width:0; margin:0; }
+.hg-pair figcaption { padding:6px; flex-wrap:wrap; font-size:14px; min-height:36px; }
+.hg-pair figcaption b { font-variant-numeric:tabular-nums; }
+.hg-glass { position:relative; }
+.hg-glass canvas { width:100%; height:auto; display:block; }
+.hg-ruler { position:absolute; inset:0; pointer-events:none; }
+.hg-ruler span { position:absolute; left:62%; transform:translateY(-50%); color:#29464f; font:600 12px system-ui,sans-serif; }
+.hg-ruler span::before { content:""; display:inline-block; width:9px; vertical-align:middle; border-top:1px solid #68828b; margin-right:4px; }
+.hg-pair p { margin:6px; font-size:13px; }
+.hg-sample-chip { display:inline-block; width:19px; height:12px; border:1px solid #677b80; border-radius:3px; margin-right:5px; vertical-align:middle; }
+.hg-evidence { display:block; margin-top:3px; color:#445e66; font-size:11px; }
+.hg-sample { font-variant-numeric:tabular-nums; font-weight:600; margin-bottom:3px; }
+.lk .hg-compare-open { color:#064e51; border-color:#79a4a4; margin:4px 0; }
+
+/* ---------- CHẶNG 1 (26/11, Lead): bố cục v3 cho bài Halogen. Xem lab_khoa_hoc_20261118/DEFINE_BO_CUC_BAI_HOC.md mục 10 ---------- */
+/* Vùng quan sát: hai ống cạnh nhau ở bảng phải, cắt sát phần dung dịch */
+.hg-watch { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:2px 0 8px; }
+.hg-watch figure { margin:0; min-width:0; border:1px solid var(--border, #e7e6ee); border-radius:10px; overflow:hidden; background:#edf2f1; }
+.hg-watch canvas { display:block; width:100%; height:auto; }
+.hg-watch figcaption { padding:5px 7px 6px; background:var(--surface, #fff); border-top:1px solid var(--border, #e7e6ee); font-size:11.5px; line-height:15px; color:var(--muted, #666878); }
+.hg-watch figcaption b { display:block; font-size:12.5px; line-height:17px; color:var(--text, #090a2b); font-weight:600; }
+.lk-read em { display:block; margin-left:0; }
+/* Danh sách việc: việc đã xong và việc chưa tới lượt thu còn một dòng; chỉ việc đang tới lượt mở to (nút sinh đôi vẫn đủ, vẫn đánh số) */
+.is-full .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock) { padding:3px 8px; border-color:transparent; background:transparent; align-items:center; }
+.is-full .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock) .lk-pn { width:20px; height:20px; margin-top:0; font-size:11px; }
+.ds .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock) .lk-pb .lk-btn { min-height:0; padding:2px 0; border:0; background:none; box-shadow:none; color:var(--muted, #666878); font-size:12.5px; }
+.is-full .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock) .lk-pb > :not(.lk-btn):not(.lk-pl) { display:none; }
+.is-full .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock) .lk-pl { font-weight:500; color:var(--muted, #666878); }
+.is-full .hg-compact .lk-proc { gap:2px; }
+/* Nhật ký: lúc làm chỉ hiện lần ghi gần nhất, bấm mới mở lịch sử và bảng tổng kết */
+.hg-log { padding-top:8px; padding-bottom:8px; }
+.hg-log > summary { display:flex; align-items:center; justify-content:space-between; gap:8px; cursor:pointer; list-style:none; font-size:12.5px; line-height:17px; }
+.hg-log > summary::-webkit-details-marker { display:none; }
+.hg-log-last { min-width:0; font-weight:600; }
+.hg-log-more { flex:none; padding:3px 9px; border:1px solid var(--control-border, #8b89a1); border-radius:999px; font-size:11.5px; color:var(--accent-hover, #4d3fdc); }
+.hg-log-more::after { content:" ▾"; } .hg-log[open] .hg-log-more::after { content:" ▴"; }
+.hg-log > h3 { margin-top:10px; }
+/* Bảng sát hạch: nút trong ô không bị bóp thành từng chữ */
+.ds .hg-exam th { font-size:11px; padding:5px 3px; white-space:normal; text-align:left; }
+.ds .hg-exam td { padding:5px 3px; font-size:11.5px; }
+.ds .hg-exam .lk-btn { min-height:28px; height:28px; padding:0 10px; white-space:nowrap; font-size:12px; }
+/* chặng 1, tinh chỉnh sau khi đo: việc đã xong gọn một dòng, bảng phải không phải cuộn để thấy việc đang tới lượt */
+.ds .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock) .lk-pb .lk-btn,
+.is-full .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock) .lk-pl { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.is-full .hg-compact .lk-pstep.is-done:not(.is-next) .lk-pl ~ * { display:none; }
+.is-full .hg-compact .lk-pstep.is-rinse:not(.is-next) { padding:3px 8px; border-color:transparent; background:transparent; align-items:center; }
+.ds .hg-compact .lk-pstep.is-rinse:not(.is-next) .lk-pb .lk-btn { min-height:0; padding:2px 0; border:0; background:none; box-shadow:none; font-size:12.5px; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lk .hg-watch + .hg-compare-open { min-height:28px; height:28px; padding:0 12px; font-size:12px; margin:0 0 6px; }
+.lk-panel .hg-compact ~ .lk-msg { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:11.5px; line-height:16px; }
+/* chặng 1b (26/11): lần ghi gần nhất nằm DƯỚI BÀN, trong thẻ phương trình; ngăn lịch sử mở phủ phần dưới của bàn */
+.lk-eqcard .hg-logbtn { pointer-events:auto; display:inline-flex; align-items:center; gap:6px; margin-left:8px; padding:3px 11px; border:1px solid var(--control-border, #8b89a1); border-radius:999px; background:#fff; font:inherit; font-size:12.5px; line-height:18px; color:var(--text, #090a2b); cursor:pointer; }
+.lk-eqcard .hg-logbtn[hidden] { display:none; }
+.lk-eqcard .hg-logbtn em { font-style:normal; font-weight:600; font-size:12.5px; color:var(--accent-hover, #4d3fdc); }
+.lk-eqcard .hg-logbtn:hover { border-color:var(--accent, #6254f4); }
+.hg-drawer { position:absolute; left:12px; right:12px; bottom:10px; z-index:6; max-height:64%; overflow:auto; padding:10px 14px 12px; border:1px solid var(--border, #e7e6ee); border-radius:14px; background:#fff; box-shadow:0 10px 28px #1d164433; }
+.hg-drawer[hidden] { display:none; }
+.hg-drawer header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.hg-drawer header b { font-size:15px; }
+.lk .hg-drawer header .lk-btn { min-height:30px; height:30px; padding:0 14px; font-size:12.5px; }
+.hg-drawer-grid { display:grid; grid-template-columns:minmax(0, 1.25fr) minmax(0, 1fr); gap:18px; align-items:start; }
+.hg-drawer-grid > section:only-child { grid-column:1 / -1; }
+.hg-drawer h3 { margin:0 0 5px; font-size:12px; font-weight:600; color:var(--muted, #666878); }
+.hg-drawer .lk-table td, .hg-drawer .lk-table th { font-size:13px !important; line-height:18px !important; }
+@media (max-width:1099px) { .hg-drawer-grid { grid-template-columns:1fr; } }
+/* việc sót chặng 1 (27/11): hộp "So màu hai ống" mở thành ngăn DƯỚI BÀN, không che giữa màn hình */
+dialog.hg-compare.hg-dock { position:absolute; inset:auto 12px 10px 12px; width:auto; max-width:none; max-height:66%; margin:0; z-index:6; box-shadow:0 10px 28px #1d164433; }
+.hg-dock .hg-pair { margin-top:8px; gap:14px; }
+.hg-dock .hg-pair figure { display:grid; justify-items:center; }
+.hg-dock .hg-glass { width:fit-content; }
+.hg-dock .hg-glass canvas { width:auto; height:min(230px, 27vh); border-radius:10px; }
+.hg-dock .hg-pair figcaption { width:100%; justify-content:center; min-height:0; padding:0 0 4px; }
+.hg-dock .hg-pair p { margin:4px 0 0; }
+.hg-dock h2 { font-size:15px; }
+/* việc sót chặng 1 (27/11): bảng phải hết tràn ở bước 4, 6, 9 */
+.ds .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock, .is-rinse) .lk-pb .lk-btn { margin:0; }
+.is-full .hg-compact .lk-pstep.is-lock:not(.is-next) .lk-pl ~ * { display:none; }
+.is-full .hg-compact .lk-pstep.is-lock:not(.is-next) { opacity:.6; }
+.lk .hg-watch + .hg-compare-open { float:right; height:24px; min-height:24px; margin:-2px 0 0 8px; }
+.lk .hg-compare-open + .lk-box { clear:both; }
+.lk-panel .hg-exam ~ .lk-cardfoot:has(select) { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px; }
+.lk-panel .hg-exam ~ .lk-cardfoot:has(select) label { display:grid; gap:2px; white-space:normal; }
+.lk-panel .hg-exam ~ .lk-cardfoot:has(select) select { width:100%; min-width:0; font-size:12px; }
+.is-full .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock, .is-rinse) { padding:0 8px; }
+.is-full .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock, .is-rinse) .lk-pn { width:18px; height:18px; font-size:10.5px; }
+.is-full .hg-compact .lk-proc { gap:1px; }
+.hg-chip { display:inline-block; width:19px; height:12px; border:1px solid #677b80; border-radius:3px; margin-right:5px; vertical-align:middle; }
+/* ---------- CHẶNG 2 (27/11, Lead): bảng trái gọn. Một câu mục tiêu; kết luận thay chỗ; chữ dài sau nút Xem thêm ---------- */
+.ds.is-full .lk-card .hg-concl-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.ds.is-full .lk-card .hg-concl-head .lk-status { font-size:11.5px; font-weight:700; padding:2px 9px; border-radius:999px; background:#fff; }
+.hg-more { margin:2px 0 0; font-size:13px; }
+.hg-more > summary { cursor:pointer; list-style:none; padding:4px 0; color:var(--accent-hover, #4d3fdc); font-weight:600; font-size:12.5px; }
+.hg-more > summary::-webkit-details-marker { display:none; }
+.hg-more > summary::after { content:" ▾"; } .hg-more[open] > summary::after { content:" ▴"; }
+.hg-more > p { margin-top:4px; }
+.hg-card .lk-ph span { display:none; } /* dòng "Bước n/9 · Câu hỏi → Làm thử → Kết luận" lặp với thanh bước: bỏ cho gọn */
+.ds.is-full .lk-card .hg-concl-head { justify-content:flex-start; } .ds.is-full .lk-card .hg-concl-head .lk-status { margin-left:auto; }
+.lk-panel:has(.hg-watch) .lk-read { margin-bottom:4px; }
+.hg-watch figcaption { padding:4px 7px; }
+/* chặng 3 (27/11): cảnh báo an toàn là dòng nhỏ riêng dưới câu phương trình */
+.lk-toast small { display:block; margin-top:3px; font-size:11.5px; line-height:16px; font-weight:400; opacity:.85; }
+
+/* Xem lại một lần thử (chặng 4 · 27/11): ô nằm đầu ngăn lịch sử, hai ống + thanh kéo theo số giọt */
+.hg-rp-open { display:block; width:max-content; margin:4px 0 1px; padding:1px 9px; border:1px solid var(--control-border, #8b89a1); border-radius:999px; background:#fff; font:inherit; font-size:11.5px; line-height:17px; font-weight:600; color:var(--accent-hover, #4d3fdc); cursor:pointer; }
+.hg-rp-open:hover { border-color:var(--accent, #6254f4); background:var(--accent-soft, #f1efff); }
+.hg-drawer tr.is-sel td { background:var(--accent-soft, #f1efff); }
+.hg-replay { margin:0 0 12px; padding:9px 12px 11px; border:1px solid var(--accent, #6254f4); border-radius:12px; background:#fbfaff; }
+.hg-replay header { margin-bottom:7px; }
+.hg-replay header h3 { margin:0; font-size:13.5px; color:var(--text, #090a2b); }
+.hg-rp-body { display:grid; grid-template-columns:minmax(0, 330px) minmax(0, 1fr); gap:16px; align-items:center; }
+.hg-rp-body .hg-watch { margin:0; }
+.hg-rp-body .hg-watch figure:only-child { grid-column:1 / -1; max-width:165px; }
+.hg-rp-ctl { display:flex; flex-direction:column; gap:7px; min-width:0; }
+.hg-rp-n { font:600 22px/26px "IBM Plex Mono", ui-monospace, monospace; }
+.hg-rp-ctl input[type=range] { width:100%; margin:0; accent-color:var(--accent, #6254f4); }
+.hg-rp-btns { display:flex; flex-wrap:wrap; gap:8px; }
+.lk .hg-rp-btns .lk-btn { min-height:32px; height:32px; padding:0 14px; font-size:13px; }
+.hg-rp-msg { margin:0; font-size:13px; line-height:18px; color:var(--muted, #666878); }
+.hg-rp-msg.is-hit { color:var(--text, #090a2b); font-weight:600; }
+.hg-rp-ctl .lk-msg { margin:0; }
+@media (max-width:1099px) { .hg-rp-body { grid-template-columns:1fr; } }
+
+/* Màn hẹp (dưới 900 px), bài có thẻ phương trình ở đáy (27/11): thẻ xuống đáy cảnh thay vì nằm đè lên ống nghiệm ở đỉnh; lời báo hiện tượng đứng dưới hàng nút mode chứ không chui dưới nút */
+@media (max-width:899px) {
+  .ds.is-v3 .lk-stage.has-modes .lk-eqcard.is-bottom { top:auto; bottom:8px; }
+  .ds.is-v3 .lk-stage.has-modes .lk-eqcard.is-bottom em { display:none; }
+  .ds.is-v3 .lk-stage.has-modes .lk-toast { top:60px; left:12px; right:12px; max-width:none; }
+}
+
+/* Ô "Bên trong ống" ở bảng trái (define mục 18, đợt A · 27/11): sơ đồ hạt 3D của ống vừa nhỏ, ba nhịp. Khung tối để hạt và thẻ tên hạt (chữ trắng) đọc rõ. */
+.hg-p3 { margin:10px 0 0; padding:8px 9px 9px; border:1px solid var(--border, #e7e6ee); border-radius:12px; background:var(--surface, #fff); }
+.hg-p3 header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 1px 6px; }
+.hg-p3 header b { min-width:0; font-size:13px; line-height:18px; font-weight:600; color:var(--text, #090a2b); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hg-p3-again { flex:none; white-space:nowrap; padding:1px 9px; border:1px solid var(--control-border, #8b89a1); border-radius:999px; background:#fff; font:inherit; font-size:11.5px; line-height:17px; font-weight:600; color:var(--accent-hover, #4d3fdc); cursor:pointer; }
+.hg-p3.is-still .hg-p3-again, .hg-p3.is-still .hg-p3-steps { display:none; }
+.hg-p3-stage { position:relative; height:clamp(150px, 17vh, 220px); border-radius:10px; overflow:hidden; background:#101a2c; }
+.hg-p3-stage .p3-cv { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
+.hg-p3-empty { position:absolute; inset:0; display:none; place-items:center; padding:14px; text-align:center; font-size:12.5px; line-height:18px; color:#b9c8da; }
+.hg-p3-stage[data-empty="1"] .hg-p3-empty { display:grid; }
+.hg-p3-stage[data-empty="1"] .p3-cv { visibility:hidden; }
+.hg-p3-steps { position:absolute; z-index:2; left:6px; right:6px; top:6px; display:flex; gap:4px; }
+.hg-p3-steps button { flex:1 1 0; min-width:0; padding:2px 2px; border:1px solid #ffffff2e; border-radius:999px; background:#0b1322b8; font:inherit; font-size:11.5px; line-height:16px; color:#c6d4e6; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hg-p3-steps button:hover { border-color:#ffffff70; }
+.hg-p3-steps button.is-on { background:var(--accent, #6254f4); border-color:var(--accent, #6254f4); color:#fff; font-weight:600; }
+.hg-p3-cap { margin:6px 1px 0; min-height:36px; font-size:12.5px; line-height:18px; color:var(--text, #090a2b); }
+.hg-p3-note { position:absolute; z-index:2; left:8px; right:8px; bottom:5px; font-size:11px; line-height:14px; color:#9db0c8; pointer-events:none; text-align:center; }
+.hg-p3-stage[data-empty="1"] .hg-p3-note { display:none; }
+
+/* Bảng trái có ô hạt: hai nút cuối thẻ gọn lại cho vừa một hàng ở bảng rộng 288 px */
+.lk .hg-card:has(.hg-p3) .lk-cardfoot .lk-btn { min-height:32px; height:32px; padding:0 12px; font-size:12.5px; }
+
+/* Ô "Bên trong ống", đợt B: cụm nút đầu ô; ô phóng to nằm ở ngăn dưới bàn (không đè lên bảng hai bên) */
+.hg-p3-btns { display:flex; flex:none; gap:5px; }
+.hg-p3-stub { display:block; width:100%; margin:10px 0 0; padding:7px 10px; border:1px dashed var(--control-border, #8b89a1); border-radius:10px; background:#fff; font:inherit; font-size:12.5px; line-height:18px; color:var(--accent-hover, #4d3fdc); cursor:pointer; text-align:left; }
+.lk-stage > .hg-p3.is-big { position:absolute; z-index:6; left:calc(var(--safe-l, 0%) + 12px); right:calc(var(--safe-r, 0%) + 12px); bottom:10px; height:min(64%, 440px); margin:0; display:flex; flex-direction:column; box-shadow:0 10px 28px #1d164433; }
+.lk-stage > .hg-p3.is-big .hg-p3-stage { flex:1 1 auto; height:auto; min-height:0; }
+.lk-stage > .hg-p3.is-big header b { font-size:14.5px; }
+.lk-stage > .hg-p3.is-big .hg-p3-cap { min-height:0; font-size:14px; line-height:20px; }
+.lk-stage > .hg-p3.is-big .hg-p3-steps { left:10px; right:auto; }
+.lk-stage > .hg-p3.is-big .hg-p3-steps button { flex:none; padding:3px 12px; font-size:13px; line-height:18px; }

@@ -24,7 +24,8 @@ const TAGS = {};
 export function tag(text) { let t = TAGS[text]; if (!t) { const c = document.createElement('canvas'), x = c.getContext('2d'), F = '700 44px -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif'; x.font = F; const w = Math.ceil(x.measureText(text).width) + 36; c.width = w; c.height = 64; x.font = F; x.fillStyle = 'rgba(8,14,26,0.82)'; x.beginPath(); x.roundRect(0, 0, w, 64, 20); x.fill(); x.fillStyle = '#ffffff'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, w / 2, 34); const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; t = TAGS[text] = { m: new THREE.SpriteMaterial({ map: tx, depthTest: false, transparent: true }), w }; }
   const s = new THREE.Sprite(t.m); s.scale.set((t.w / 64) * 0.62, 0.62, 1); s.renderOrder = 20; return s; }
 
-export function mountProcess3D(stage, { onPhase } = {}) {
+// live (tuỳ chọn): hàm trả false thì khung này tạm không tính, không vẽ (bài học gắn khung vào bảng bên, có lúc khung không nằm trong trang). pause(bật): đứng hình ở cảnh đang có.
+export function mountProcess3D(stage, { onPhase, live } = {}) {
   const cv = document.createElement('canvas'); cv.className = 'p3-cv'; stage.prepend(cv);
   const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true }); renderer.setClearColor(0x000000, 0);
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(30, 1, 0.1, 200), controls = new OrbitControls(camera, cv);
@@ -60,7 +61,9 @@ export function mountProcess3D(stage, { onPhase } = {}) {
     pick.forEach((p, k) => { p.claim = true; if (p === host) { p.state = 'hold'; return; } const a = (k / pick.length) * 6.283; p.state = 'meet'; p.from = p.o.position.clone(); p.to = at.clone().add(V3(Math.cos(a) * 0.62, Math.sin(a) * 0.5, Math.sin(a * 1.7) * 0.5)); p.t = 0; });
     pick.t = 0; pick.at = at; meets.push(pick); return true; }
   const meets = [];
-  function product(pick) { const at = pick.at, ions = pick.every((p) => p.sp.kind === 'ion'), one = M.rhs.length === 1 && M.rhs[0].kind === 'ppt' && M.rhs[0].n === 1;
+  function product(pick) {
+    if (M.bounce) { pick.forEach((p) => { p.claim = false; p.state = 'free'; const d = p.o.position.clone().sub(pick.at); if (d.lengthSq() < 1e-4) d.set(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)); p.v.copy(d.normalize().multiplyScalar(2.6)); }); return; } // không phản ứng: chạm nhau rồi tách ra, không có hạt mới (bài học khai bounce)
+    const at = pick.at, ions = pick.every((p) => p.sp.kind === 'ion'), one = M.rhs.length === 1 && M.rhs[0].kind === 'ppt' && M.rhs[0].n === 1;
     if (one && ions) { // kết tủa: chính các ion vừa gặp nhau dính lại thành một hạt rắn rồi chìm xuống
       const x = M.rhs[0], sp = M.species[x.label], o = new THREE.Group(); o.position.copy(at); world.add(o); let r = 0.6;
       pick.forEach((p) => { p.o.children.filter((c) => c.isSprite).forEach((c) => p.o.remove(c)); const d = p.o.position.clone().sub(at); world.remove(p.o); p.g.position.copy(d); o.add(p.g); r = Math.max(r, d.length() + p.r); });
@@ -84,9 +87,9 @@ export function mountProcess3D(stage, { onPhase } = {}) {
     parts = parts.filter((p) => p.state !== 'gone'); }
   function size() { const r = stage.getBoundingClientRect(); if (r.width < 20 || r.height < 20) return false; const d = Math.min(window.devicePixelRatio || 1, 2), w = Math.round(r.width * d), h = Math.round(r.height * d); if (cv.width !== w || cv.height !== h) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = camera.aspect < 0.9 ? 40 : 30; camera.updateProjectionMatrix(); } return true; }
   const render = () => { if (!size()) return; controls.update(); renderer.render(scene, camera); };
-  let prev = 0; const loop = (now) => { const dt = Math.min(0.1, (now - prev) / 1000 || 0); prev = now; sim(dt); render(); requestAnimationFrame(loop); }; requestAnimationFrame(loop);
+  let prev = 0, paused = false; const loop = (now) => { const dt = Math.min(0.1, (now - prev) / 1000 || 0); prev = now; if (!live || live()) { if (!paused) sim(dt); render(); } requestAnimationFrame(loop); }; requestAnimationFrame(loop);
   const run = (sec) => { for (let t = 0; t < sec; t += 1 / 30) sim(1 / 30); render(); };
   return { set(model, captions = []) { const key = model ? model.key : ''; caps = captions; stage.dataset.empty = model ? '' : '1'; if ((M ? M.key : '') === key) { if (onPhase && phase) onPhase(phase, caps[phase - 1] || ''); return; } M = model; meets.length = 0; reset(); },
-    replay() { meets.length = 0; reset(); }, goto(k) { meets.length = 0; reset(); if (k > 1) run(k === 2 ? T1 + 0.05 : T2 + 2.5); }, run,
+    replay() { meets.length = 0; reset(); }, pause(v) { paused = !!v; }, goto(k) { meets.length = 0; reset(); if (k > 1) run(k === 2 ? T1 + 0.05 : T2 + 2.5); }, run,
     shot: async (name) => { render(); const res = await fetch('/__shot?name=' + name, { method: 'POST', body: await (await fetch(cv.toDataURL('image/jpeg', 0.93))).blob() }); return `${name}: ${res.status}`; } };
 }

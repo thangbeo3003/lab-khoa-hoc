@@ -334,7 +334,7 @@ export function createFreeBench(host, { nameOf = (id) => id, theme = {} } = {}) 
     ctx.restore();
     if (T.stream2) { const q = T.stream2, w = 0.3 * PPC; ctx.fillStyle = rgba(q.col, 0.7, 0.95); ctx.beginPath(); ctx.roundRect(q.x - w / 2, q.y0, w, q.y1 - q.y0, w / 2); ctx.fill(); }
   }
-  function label(b, hw, hb) { const lw = hw * 1.62, lh = hb * 0.36, ly = -hb * 0.52, t = b.id === 'pp' ? 'PP' : pretty(BY_ID[b.id].f), c = BY_ID[b.id], sub = b.id === 'H2O' ? 'nước cất' : b.id === 'H2O2' ? '3%' : c.conc ? `${String(c.conc).replace('.', ',')} M` : b.kind === 'jar' ? 'chất rắn' : 'chỉ thị';
+  function label(b, hw, hb) { const lw = hw * 1.62, lh = hb * 0.36, ly = -hb * 0.52, t = b.id === 'pp' ? 'PP' : pretty(BY_ID[b.id].f), c = BY_ID[b.id], sub = FLAT_CONC.text && c.conc ? FLAT_CONC.text(b.id) : b.id === 'H2O' ? 'nước cất' : b.id === 'H2O2' ? '3%' : c.conc ? `${String(c.conc).replace('.', ',')} M` : b.kind === 'jar' ? 'chất rắn' : 'chỉ thị';
     ctx.save(); ctx.beginPath(); ctx.roundRect(-lw / 2, ly, lw, lh, lh * 0.06); ctx.fillStyle = 'rgba(252,253,254,0.97)'; ctx.fill(); ctx.clip(); ctx.fillStyle = '#2f6fd0'; ctx.fillRect(-lw / 2, ly, lw, lh * 0.09);
     ctx.fillStyle = '#16324f'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; let fs = lh * 0.36; ctx.font = `700 ${fs}px ${FONT}`; const tw = ctx.measureText(t).width; if (tw > lw * 0.84) { fs *= (lw * 0.84) / tw; ctx.font = `700 ${fs}px ${FONT}`; } ctx.fillText(t, 0, ly + lh * 0.5); ctx.font = `500 ${lh * 0.17}px ${FONT}`; ctx.fillStyle = '#52657a'; ctx.fillText(sub, 0, ly + lh * 0.8);
     const sh = ctx.createLinearGradient(-lw / 2, 0, lw / 2, 0); sh.addColorStop(0, 'rgba(20,30,45,0.22)'); sh.addColorStop(0.2, 'rgba(20,30,45,0)'); sh.addColorStop(0.75, 'rgba(20,30,45,0)'); sh.addColorStop(1, 'rgba(20,30,45,0.26)'); ctx.fillStyle = sh; ctx.fillRect(-lw / 2, ly, lw, lh); ctx.restore(); }
@@ -539,3 +539,37 @@ export function createFreeBench(host, { nameOf = (id) => id, theme = {} } = {}) 
     busy: () => !!seq, onPick(cb) { pickCb = cb; }, onHover(cb) { hoverCb = cb; }, hovered: () => hover,
     shot: async (name) => { draw(); const res = await fetch('/__shot?name=' + name, { method: 'POST', body: await (await fetch(cv.toDataURL('image/jpeg', 0.93))).blob() }); return `${name}: ${res.status} ${cv.width}x${cv.height}`; } };
 }
+
+// ---------- XUẤT DÙNG CHUNG cho bộ máy 2D của bài học (flat/labset2d.js, 25/11). Chỉ thêm, các hàm trong createFreeBench ở trên giữ nguyên. ----------
+// Mọi hàm nhận ctx của canvas gọi tới, toạ độ đã đặt gốc ở GIỮA ĐÁY ảnh (y âm là đi lên), s = hệ số co ảnh (điểm cảnh trên một điểm ảnh gốc).
+export { META as FLAT_META, IM as FLAT_IMG, rgba as flatRgba, FONT as FLAT_FONT };
+// Ảnh nền xám 50% (kính, khí cụ chụp): trộn hard-light nên phần xám trong suốt. Ảnh có kênh alpha (đồ đục: cân, đồng hồ, bình tia): vẽ thường.
+export const isGlassImg = (k) => !!IM[k] && !!META[k] && META[k].file.endsWith('.webp') && !('left' in META[k]) && !['dish', 'stand', 'clamp', 'ring', 'tripod', 'holder', 'washbottle', 'rack'].includes(k);
+export function drawFlatImg(c, k, s, { alpha = 1, sx = 0, sw = null, flip = false } = {}) {
+  const m = META[k], im = IM[k]; if (!m || !im) return false; const w = sw ?? m.w - sx;
+  c.save(); c.globalAlpha *= alpha; if (isGlassImg(k)) c.globalCompositeOperation = 'hard-light'; if (flip) c.scale(-1, 1);
+  c.drawImage(im, sx, 0, w, m.h, (sx - m.cx) * s, -m.bottom * s, w * s, m.h * s); c.restore(); return true;
+}
+// Đường bao lòng dụng cụ từ prof (như inner() ở trên), để cắt chất lỏng đúng dáng bình.
+const flatPathCache = new Map();
+export function flatInner(m, s, yTop) {
+  const key = m.file + '|' + s.toFixed(5) + '|' + yTop.toFixed(3); let p = flatPathCache.get(key); if (p) return p; if (flatPathCache.size > 600) flatPathCache.clear();
+  const rows = m.prof.filter((r) => r[0] <= m.bottom - (m.floor || 0)).map((r) => [(r[0] - m.bottom) * s, (r[1] + (m.wall || 0) - m.cx) * s, (r[2] - (m.wall || 0) - m.cx) * s]).filter((r) => r[2] > r[1] && r[0] >= yTop);
+  p = new Path2D(); if (rows.length) { p.moveTo(rows[0][1], yTop); for (const r of rows) p.lineTo(r[1], r[0]); for (let k = rows.length - 1; k >= 0; k--) p.lineTo(rows[k][2], rows[k][0]); p.lineTo(rows[0][2], yTop); p.closePath(); }
+  flatPathCache.set(key, p); return p;
+}
+// Chất lỏng trong lòng dụng cụ m tới độ cao top (âm), đậm hai mép như liquid() ở trên.
+export function drawFlatLiquid(c, m, s, top, hex, a) {
+  const hw = (m.body || m.w) * s * 0.5; c.save(); c.clip(flatInner(m, s, top)); const g = c.createLinearGradient(-hw, 0, hw, 0);
+  g.addColorStop(0, rgba(hex, Math.min(0.95, a + 0.22), 0.72)); g.addColorStop(0.22, rgba(hex, a, 0.95)); g.addColorStop(0.55, rgba(hex, a * 0.86, 1.06)); g.addColorStop(0.82, rgba(hex, a, 0.92)); g.addColorStop(1, rgba(hex, Math.min(0.95, a + 0.22), 0.68));
+  c.fillStyle = g; c.fillRect(-hw * 1.3, top, hw * 2.6, -top + 6); c.restore();
+}
+// Mẩu chất rắn vẽ bằng mã (cùng dáng với piece() ở trên): kind = 'pebble' | 'strip' | 'cube' | 'powder' | 'nail'.
+export function drawFlatPiece(c, kind, col, r, seed = 1) {
+  c.save(); const g = c.createLinearGradient(-r, -r, r, r); g.addColorStop(0, rgba(col, 1, 1.25)); g.addColorStop(1, rgba(col, 1, 0.62)); c.fillStyle = g; c.strokeStyle = rgba(col, 0.9, 0.45); c.lineWidth = Math.max(0.02, r * 0.08); c.beginPath();
+  if (kind === 'strip') c.roundRect(-r * 0.35, -r * 1.5, r * 0.7, r * 3, r * 0.12); else if (kind === 'cube') c.roundRect(-r * 0.8, -r * 0.8, r * 1.6, r * 1.6, r * 0.2); else if (kind === 'powder') { c.moveTo(-r * 1.3, r * 0.6); c.quadraticCurveTo(0, -r * 1.3, r * 1.3, r * 0.6); c.closePath(); } else if (kind === 'nail') { c.roundRect(-r * 0.16, -r * 1.7, r * 0.32, r * 3.4, r * 0.1); } else { for (let k = 0; k < 7; k++) { const a = (k / 7) * 6.283, q = r * (0.78 + 0.26 * Math.sin(seed * 7 + k * 2.3)); c[k ? 'lineTo' : 'moveTo'](Math.cos(a) * q, Math.sin(a) * q * 0.82); } c.closePath(); }
+  c.fill(); c.stroke(); c.restore();
+}
+export const FLAT_SOLID = SOLID;
+// Chữ nồng độ trên nhãn lọ (26/11): trang Thực hành (free/lab.js) đặt FLAT_CONC.text để nhãn viết đúng như tủ, ví dụ ẩn số minh hoạ chưa có nguồn. Không đặt thì như cũ.
+export const FLAT_CONC = { text: null };

@@ -138,7 +138,7 @@ export function createStage(host, { leader = false, oversample = 1 } = {}) {
   // ----- Chạm chọn vật -----
   const pickables = []; let onPick = null;
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(); let down = null;
-  renderer.domElement.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+  renderer.domElement.addEventListener('pointerdown', (e) => { down = e.button === 0 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null; });
   renderer.domElement.addEventListener('pointerup', (e) => {
     if (!down || !onPick) return;
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dt = performance.now() - down.t; down = null;
