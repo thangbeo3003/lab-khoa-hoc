@@ -178,6 +178,7 @@ export function createLab2d(host, decl, opts = {}) {
     });
     (d.pipes || []).forEach(([a, b]) => { if (B.items[a] && B.items[b]) B.pipes.push({ a: B.items[a], b: B.items[b], on: !d.pipesOff }); });
     if (d.scene2d && d.scene2d.attach) d.scene2d.attach(B); // CẢNH TỰ VẼ (sa bàn · 27/11): xem drawBench
+    if (d.scene2d && d.scene2d.grab) cv.style.touchAction = 'none'; // có núm kéo: ngón tay kéo trên cảnh không cuộn trang
     benches[d.id] = B; list.push(B);
     layout(B); reset(B);
   }
@@ -1224,7 +1225,19 @@ export function createLab2d(host, decl, opts = {}) {
     if (hood && x >= hood.pos.x - hood.L && x <= hood.pos.x + hood.R && y >= hood.pos.y - hood.h && y <= hood.pos.y) return hood;
     return null;
   }
+  // KÉO TRÊN CẢNH TỰ VẼ (27/11, chủ: chỉnh ngay trên máy, không chỉ ở bảng): cảnh khai grab(sx, sy, B, set) trả { move(sx, sy), end(moved) } nếu điểm chạm là một núm;
+  // set(key, value) báo ra ngoài qua sự kiện 'knob' (bài tự kiểm bước nào được chỉnh). Kéo quá 5 px mới tính là kéo; có kéo thì không tính là chạm.
+  let grab = null, grabMoved = false, noClick = false;
+  cv.addEventListener('pointerdown', (e) => {
+    const B = active && benches[active]; if (!B || !B.d.scene2d || !B.d.scene2d.grab || e.button > 0) return;
+    const p = toCanvas(e), g = B.d.scene2d.grab(p.sx, p.sy, B, (key, v) => { if (cb.knob) cb.knob(B.id, key, v); }); if (!g) return;
+    grab = Object.assign(g, { x0: e.clientX, y0: e.clientY }); grabMoved = false; try { cv.setPointerCapture(e.pointerId); } catch (err) { /* trình duyệt cũ */ }
+    e.preventDefault();
+  });
+  cv.addEventListener('pointermove', (e) => { if (!grab) return; if (!grabMoved && Math.hypot(e.clientX - grab.x0, e.clientY - grab.y0) < 5) return; grabMoved = true; const p = toCanvas(e); grab.move(p.sx, p.sy); });
+  ['pointerup', 'pointercancel'].forEach((n) => cv.addEventListener(n, () => { if (!grab) return; if (grab.end) grab.end(grabMoved); noClick = grabMoved; grab = null; }));
   cv.addEventListener('click', (e) => {
+    if (noClick) { noClick = false; return; }
     const p = toCanvas(e);
     if (!active) { const t = tiles.find((q) => p.sx >= q.l && p.sx <= q.r && p.sy >= q.t && p.sy <= q.b); if (t && cb.pick) cb.pick(t.id); return; }
     const it = itemAt(p); if (it && it.touch) hand(benches[active], it.id);

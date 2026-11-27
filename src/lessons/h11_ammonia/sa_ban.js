@@ -55,8 +55,31 @@ function valveWheel(parent, x, y, z, color) {
   const rim = add(wheel, new T.TorusGeometry(0.13, 0.024, 10, 28), color); rim.rotation.x = Math.PI / 2;
   [0, 1, 2].forEach((i) => { const s = add(wheel, cyl(0.014, 0.25, 8), color); s.rotation.z = Math.PI / 2; s.rotation.y = (i / 3) * Math.PI; });
   const lamp = add(g, new T.SphereGeometry(0.045, 14, 10), new T.MeshStandardMaterial({ color: '#7b8a90', emissive: '#000000', roughness: 0.3 }), 0.17, 0.06, 0);
-  let k = 0, to = 0;
-  return { set(open) { to = open ? 1 : 0; lamp.material.color.set(open ? '#49e08a' : '#d45a4e'); lamp.material.emissive.set(open ? '#1fae5c' : '#8c2a20'); }, update(dt) { dt = safe(dt); k += (to - k) * Math.min(1, dt * 5); wheel.rotation.y = k * 4.2; } };
+  const ring = new T.Mesh(new T.TorusGeometry(0.21, 0.014, 8, 40), new T.MeshBasicMaterial({ color: '#6254f4', toneMapped: false })); ring.rotation.x = Math.PI / 2; ring.position.y = 0.2; ring.visible = false; g.add(ring);
+  const hit = new T.Mesh(new T.SphereGeometry(0.24, 14, 10), new T.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })); hit.position.y = 0.2; g.add(hit);
+  let k = 0, to = 0, turn = 1; // turn: mức mở 0..1 (vặn vô lăng để đặt phần trăm tuần hoàn)
+  return { hit, ring, setTurn(v) { turn = Math.max(0, Math.min(1, v)); }, set(open) { to = open ? 1 : 0; lamp.material.color.set(open ? '#49e08a' : '#d45a4e'); lamp.material.emissive.set(open ? '#1fae5c' : '#8c2a20'); }, update(dt) { dt = safe(dt); k += (to - k) * Math.min(1, dt * 5); wheel.rotation.y += ((k * (1.2 + 4.2 * turn)) - wheel.rotation.y) * Math.min(1, dt * 10 || 1); } };
+}
+
+// ĐỒNG HỒ KIM dùng chung (áp suất ở máy nén, nhiệt độ ở tháp): mặt số vẽ bằng canvas, viền đồng, có VÒNG GỢI Ý màu nhấn (hiện khi bước cho chỉnh)
+// và một đĩa trong suốt rộng hơn mặt số để bắt chuột, ngón tay (27/11: kéo kim ngay trên máy để đặt số, xem connectDials).
+function makeGauge({ min, max, unit, zones, r = 0.2 }) {
+  const g = new T.Group(), cv = document.createElement('canvas'); cv.width = cv.height = 256; const tex = new T.CanvasTexture(cv); tex.colorSpace = T.SRGBColorSpace; tex.anisotropy = 8;
+  const A = (v) => Math.PI * (0.8 + 1.4 * (v - min) / (max - min));
+  const back = add(g, cyl(r * 1.04, 0.05, 32), M.dark, 0, 0, -0.03); back.rotation.x = Math.PI / 2;
+  const face = add(g, new T.CircleGeometry(r, 40), new T.MeshBasicMaterial({ map: tex, toneMapped: false })); face.castShadow = false;
+  add(g, new T.TorusGeometry(r, r * 0.11, 8, 36), M.brass);
+  const ring = new T.Mesh(new T.TorusGeometry(r * 1.34, r * 0.06, 8, 44), new T.MeshBasicMaterial({ color: '#6254f4', toneMapped: false })); ring.visible = false; g.add(ring);
+  const hit = new T.Mesh(new T.CircleGeometry(r * 1.5, 24), new T.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })); hit.position.z = 0.014; g.add(hit);
+  let cur = null;
+  function draw(v) {
+    const c = cv.getContext('2d'); c.fillStyle = '#fbfcfc'; c.fillRect(0, 0, 256, 256); c.lineWidth = 16; c.lineCap = 'butt';
+    zones.forEach(([a, b, col]) => { c.strokeStyle = col; c.beginPath(); c.arc(128, 136, 92, A(a), A(b)); c.stroke(); });
+    const a = A(v); c.strokeStyle = '#16232b'; c.lineWidth = 9; c.lineCap = 'round'; c.beginPath(); c.moveTo(128, 136); c.lineTo(128 + Math.cos(a) * 76, 136 + Math.sin(a) * 76); c.stroke();
+    c.fillStyle = '#16232b'; c.font = `600 44px ${FONT}`; c.textAlign = 'center'; c.fillText(String(v), 128, 214); c.font = `500 24px ${FONT}`; c.fillText(unit, 128, 240); tex.needsUpdate = true;
+  }
+  if (FONT_READY) FONT_READY.then(() => { if (cur != null) draw(cur); });
+  return { g, hit, ring, set(v) { if (v !== cur) { cur = v; draw(v); } } };
 }
 
 // ---------- ĐẾ TRƯNG BÀY: gỗ sẫm, mặt đế sáng có mảng màu và SỐ của từng khu; TÊN KHU nằm trên dải nghiêng ở mép trước ----------
@@ -131,12 +154,10 @@ export function makeComp() {
   const fly = new T.Group(); fly.position.set(0.3, 0.38, 0.33); g.add(fly);
   const disc = add(fly, cyl(0.26, 0.06, 32), M.dark); disc.rotation.x = Math.PI / 2;
   [0, 1, 2].forEach((i) => { const s = add(fly, new T.BoxGeometry(0.46, 0.05, 0.02), M.yellow, 0, 0, 0.035); s.rotation.z = (i / 3) * Math.PI; });
-  const cv = document.createElement('canvas'); cv.width = cv.height = 256; const tex = new T.CanvasTexture(cv); tex.colorSpace = T.SRGBColorSpace;
-  const dial = add(g, new T.CircleGeometry(0.2, 40), new T.MeshBasicMaterial({ map: tex, toneMapped: false }), -0.36, 0.86, 0.02); add(g, cyl(0.03, 0.26, 10), M.steel, -0.36, 0.72, -0.01); const ring = add(g, new T.TorusGeometry(0.2, 0.022, 8, 36), M.brass, -0.36, 0.86, 0.02);
+  const G = makeGauge({ min: 50, max: 350, unit: 'bar', zones: [[50, 150, '#8fb3d9'], [150, 200, '#49b675'], [200, 350, '#e0823a']] }); G.g.position.set(-0.36, 0.86, 0.02); g.add(G.g); add(g, cyl(0.03, 0.26, 10), M.steel, -0.36, 0.72, -0.01);
   let p = -1, run = false, spin = 0;
-  function draw(v) { const c = cv.getContext('2d'); c.fillStyle = '#fbfcfc'; c.fillRect(0, 0, 256, 256); c.lineWidth = 16; [[50, 150, '#8fb3d9'], [150, 200, '#49b675'], [200, 350, '#e0823a']].forEach(([a, b, col]) => { c.strokeStyle = col; c.beginPath(); c.arc(128, 136, 92, Math.PI * (0.8 + 1.4 * (a - 50) / 300), Math.PI * (0.8 + 1.4 * (b - 50) / 300)); c.stroke(); }); const a = Math.PI * (0.8 + 1.4 * (v - 50) / 300); c.strokeStyle = '#16232b'; c.lineWidth = 9; c.lineCap = 'round'; c.beginPath(); c.moveTo(128, 136); c.lineTo(128 + Math.cos(a) * 76, 136 + Math.sin(a) * 76); c.stroke(); c.fillStyle = '#16232b'; c.font = `700 44px ${FONT}`; c.textAlign = 'center'; c.fillText(String(v), 128, 214); c.font = `500 24px ${FONT}`; c.fillText('bar', 128, 240); tex.needsUpdate = true; }
-  g.userData = { top: 1.15, set(s) { run = !!s.run; if (s.p !== p) { p = s.p; draw(p); } }, update(dt) { dt = safe(dt); spin += dt * (run ? 4 + p / 40 : 0); fly.rotation.z = -spin; } };
-  g.userData.set({ p: 200, run: false }); void dial; void ring;
+  g.userData = { top: 1.15, dial: { key: 'p', mode: 'abs', hit: G.hit, ring: G.ring }, set(s) { run = !!s.run; if (s.p !== p) { p = s.p; G.set(p); } }, update(dt) { dt = safe(dt); spin += dt * (run ? 4 + p / 40 : 0); fly.rotation.z = -spin; } };
+  g.userData.set({ p: 200, run: false });
   return g;
 }
 
@@ -166,10 +187,13 @@ export function makeTower({ h = 3.0 } = {}) {
   add(g, cyl(0.045, h - 0.2, 12), M.steel, 0, y0 + h / 2, 0); // ống giữa
   const plat = add(g, new T.TorusGeometry(r + 0.2, 0.025, 8, 36, Math.PI), M.yellow, 0, y0 + 1.95, 0); plat.rotation.x = Math.PI / 2; plat.rotation.z = Math.PI;
   [-0.1, 0.1].forEach((dx) => add(g, cyl(0.015, 1.95, 8), M.yellow, r + 0.12 + dx * 0.5, y0 + 0.98, -0.3 + dx));
+  // Đồng hồ nhiệt của tháp: gắn trên một giá ngắn bên phải thân tháp (không gắn lên nửa vỏ mở được), quay mặt về phía người xem; kéo kim để đặt nhiệt độ
+  const TG = makeGauge({ min: 200, max: 700, unit: '°C', zones: [[200, 400, '#8fb3d9'], [400, 450, '#49b675'], [450, 700, '#e0823a']], r: 0.2 }); TG.g.position.set(r + 0.34, y0 + 2.25, 0.16); g.add(TG.g); // cao hơn trạm van tuần hoàn để hai núm không chồng nhau trên màn hình
+  const arm = add(g, cyl(0.025, 0.36, 10), M.steel, r + 0.16, y0 + 2.25, 0.1); arm.rotation.z = Math.PI / 2;
   let cut = 0, to = 0, heat = 0, heatTo = 0, run = false, t = 0;
   const tint = new T.Color();
-  g.userData = { top: y0 + h + 0.55,
-    set(s) { to = s.cut ? 1 : 0; run = !!s.run; beds.forEach((b) => { b.visible = !!s.cat; }); pellets.visible = !!s.cat; heatTo = Math.max(0, Math.min(1, (s.T - 150) / 500)); tint.set('#7a1f08').lerp(new T.Color('#ffc46b'), heatTo); hot.emissive.copy(tint); },
+  g.userData = { top: y0 + h + 0.55, dial: { key: 'T', mode: 'abs', hit: TG.hit, ring: TG.ring },
+    set(s) { TG.set(s.T); to = s.cut ? 1 : 0; run = !!s.run; beds.forEach((b) => { b.visible = !!s.cat; }); pellets.visible = !!s.cat; heatTo = Math.max(0, Math.min(1, (s.T - 150) / 500)); tint.set('#7a1f08').lerp(new T.Color('#ffc46b'), heatTo); hot.emissive.copy(tint); },
     update(dt) { dt = safe(dt); t += dt; cut += (to - cut) * Math.min(1, dt * 2.4); door.rotation.y = -cut * 1.95; heat += (heatTo - heat) * Math.min(1, dt * 2); hot.emissiveIntensity = (0.25 + 1.5 * heat) * (run ? 1 + 0.18 * Math.sin(t * 7) : 0.8); } };
   g.userData.set({ T: 450, cat: true, cut: false, run: false });
   return g;
@@ -227,7 +251,7 @@ export function makeLoop() {
   add(g, new T.BoxGeometry(0.5, 0.16, 0.36), M.dark, 0, 0.08, 0);
   const pump = add(g, cyl(0.17, 0.3, 24), M.teal, 0, 0.36, 0); pump.rotation.x = Math.PI / 2;
   const v = valveWheel(g, 0.42, 0.44, 0, M.green);
-  g.userData = { top: 1.0, setOn: (on) => v.set(on), update: (dt) => v.update(dt) };
+  g.userData = { top: 1.0, dial: { key: 'rec', mode: 'turn', hit: v.hit, ring: v.ring, tap: true }, setOn: (on) => v.set(on), setRec: (pc) => v.setTurn(pc / 95), update: (dt) => v.update(dt) };
   g.userData.setOn(false);
   return g;
 }
@@ -353,3 +377,30 @@ const MAKE = { base: makeBase, feed: makeFeed, comp: makeComp, tower: makeTower,
 const STUDIO = typeof location === 'undefined' || new URLSearchParams(location.search).get('nen') !== 'phong';
 export const declaration = (decl) => ({ ...decl, benches: decl.benches.map((b) => ({ ...b, ...(STUDIO ? { backdrop: 0xcfd9df, island: false } : {}),
   items: b.items.map((it) => (MAKE[it.id] ? { ...it, make3d: MAKE[it.id], ...(it.id === 'base' ? { opts: { studio: STUDIO } } : {}) } : it)) })) });
+
+// ---------- KÉO NÚM NGAY TRÊN SA BÀN (27/11, chủ: "thao tác các nút ở màn hình chính chứ k phải panel") ----------
+// Món nào khai userData.dial = { key, mode, hit, ring, tap? } thì kéo được: 'abs' = kéo kim quanh tâm mặt đồng hồ (góc → số), 'turn' = vặn vô lăng (góc quay cộng dồn → số).
+// Bắt cử chỉ ở pha capture của khung sân khấu nên máy quay không xoay khi đang kéo núm. Chạm mà không kéo trên món có tap thì vẫn là "chạm" của bài (lab.hand).
+// set(key, value) → true/false do bài quyết (bước nào cho chỉnh); get(key) = số hiện tại; range(key) = [min, max]. Trả sync(slide) để bật vòng gợi ý theo bước.
+export function connectDials(lab, bid, { set, get, range }) {
+  const { camera, renderer } = lab.stage, cv = renderer.domElement, host = cv.parentElement, ray = new T.Raycaster(), ndc = new T.Vector2(), w = new T.Vector3();
+  const A0 = 0.8 * Math.PI, A1 = 2.2 * Math.PI, frac = (dx, dy) => { let a = Math.atan2(dy, dx); if (a < Math.PI * 0.5) a += 2 * Math.PI; return Math.max(0, Math.min(1, (a - A0) / (A1 - A0))); };
+  const dials = () => Object.entries(lab.benches[bid].items).map(([id, it]) => it.obj && it.obj.userData.dial && it.obj.visible ? { id, ...it.obj.userData.dial } : null).filter(Boolean);
+  const pick = (e) => { const r = cv.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); camera.updateMatrixWorld(); ray.setFromCamera(ndc, camera);
+    let best = null; dials().forEach((d) => { const hit = ray.intersectObject(d.hit, false)[0]; if (hit && (!best || hit.distance < best.dist)) best = { d, dist: hit.distance }; }); return best && best.d; };
+  const centre = (d) => { d.hit.getWorldPosition(w).project(camera); const r = cv.getBoundingClientRect(); return [r.left + ((w.x + 1) / 2) * r.width, r.top + ((1 - w.y) / 2) * r.height]; };
+  let drag = null;
+  host.addEventListener('pointerdown', (e) => {
+    if (e.button > 0 || lab.active() !== bid) return; const d = pick(e); if (!d) return;
+    e.stopPropagation(); e.preventDefault(); drag = { d, id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, a: null, v0: get(d.key), acc: 0 }; d.ring.scale.setScalar(1.12);
+  }, true);
+  window.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return; if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5) return; drag.moved = true;
+    const { d } = drag, [cx, cy] = centre(d), dx = e.clientX - cx, dy = e.clientY - cy, [min, max] = range(d.key);
+    if (d.mode === 'abs') { set(d.key, min + (max - min) * frac(dx, dy)); return; }
+    const a = Math.atan2(dy, dx); if (drag.a == null) drag.a = a; let da = a - drag.a; if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI; drag.a = a; drag.acc += da;
+    set(d.key, drag.v0 + (drag.acc / (1.5 * Math.PI)) * (max - min)); // vặn ba phần tư vòng là đi hết thang
+  });
+  ['pointerup', 'pointercancel'].forEach((n) => window.addEventListener(n, (e) => { if (!drag || e.pointerId !== drag.id) return; const { d, moved } = drag; drag = null; d.ring.scale.setScalar(1); if (!moved && d.tap && n === 'pointerup') lab.hand(bid, d.id); }));
+  return { sync(slide = []) { dials().forEach((d) => { d.ring.visible = slide.includes(d.key); }); } };
+}

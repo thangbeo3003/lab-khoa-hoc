@@ -5,7 +5,7 @@ import { h } from '../../shell/shell.js';
 import { procList, bindSafeArea, vcard, tuckHandles, zoomBox } from '../../shell/labui.js';
 import { createLab } from '../../kit/labset.js';
 import { meta, steps, lab as DECL, SUMMARY, SAFETY, cfgOf, REF, RANGE, BOOK, TARGET, RUN_S } from './giao_an.js';
-import { declaration, LEGEND } from './sa_ban.js';
+import { declaration, LEGEND, connectDials } from './sa_ban.js';
 import { xEq, pct, inBook } from './mo_hinh.js';
 import { createChart, CHART_CSS } from './do_thi.js';
 import { MECH } from './be_mat_fe.js';
@@ -62,6 +62,7 @@ const CSS = `
 export function createLesson(shell) {
   const lab = MODE2D ? createLab2d(shell.els.stage, declaration2d(DECL)) : createLab(shell.els.stage, declaration(DECL)), stage = lab.stage;
   shell.els.stage.closest('.lk').classList.add('is-v3');
+  let dials3d = null; // núm kéo trên sa bàn 3D (gán ở dưới, sau khi có setKnob)
   if (!MODE2D && stage.renderer) stage.renderer.toneMappingExposure = 1.1; // sa bàn: hạ độ sáng (mặc định 1,3) để mặt thép còn tương phản, không lì như nhựa (27/11)
   if (!document.getElementById('sb-css')) document.head.append(h('style', { id: 'sb-css', text: CSS + CHART_CSS }));
   const D = shell.state.data; // phần được lưu
@@ -127,7 +128,7 @@ export function createLesson(shell) {
   function sync3D() {
     const b = B(); if (!b || !b.items.tower) return; const d = b.data, c = cfgOf(b), live = d.live ? d.live.r : null, last = lastRow(), running = !!live;
     U('tower').set({ T: c.T, cat: c.cat, cut: !!d.cut, run: running });
-    U('comp').set({ p: c.p, run: running });
+    U('comp').set({ p: c.p, run: running }); if (U('loop').setRec) U('loop').setRec(D.cfg.rec);
     U('panel').set({ run: running, prog: d.prog || 0 });
     U('sep').setLevel(d.liq || 0);
     // Kính soi hạt: hiện khi vỏ tháp mở. Thẻ tên của món ẩn phải được dựng lại, và lần đầu hiện thì có một lời dẫn.
@@ -156,18 +157,32 @@ export function createLesson(shell) {
     ui.cells[1].set('Sản lượng', r ? `${num(r.tpd)} t/ngày` : '—');
     ui.cells[2].set('Chi phí năng lượng', r ? String(r.cost) : '—');
   }
+  // ĐẶT MỘT CON SỐ CỦA NHÀ MÁY: cùng một đường cho thanh kéo ở bảng và núm ngay trên máy (27/11, chủ: "thao tác các nút ở màn hình chính chứ k phải panel").
+  // Bước nào không cho chỉnh số đó thì nhắc một lần; van tuần hoàn đang đóng thì nhắc mở van trước.
+  const KUI = {}; let toldAt = 0, toldKey = '';
+  const hintOnce = (k, text) => { const now = performance.now(); if (toldKey === k && now - toldAt < 4000) return; toldKey = k; toldAt = now; toast(text, 5); };
+  function setKnob(key, v) {
+    if (S.replaying || !RANGE[key]) return false; const i = S.step, b = B();
+    if (!SLIDE[i].includes(key)) { hintOnce(key, `Bước này giữ nguyên ${KNOB[key][0].toLowerCase()}.`); return false; }
+    if (key === 'rec' && !b.data.loop) { hintOnce('loop', 'Van tuần hoàn đang đóng: chạm van để mở, rồi xoay để đặt phần trăm khí quay lại.'); return false; }
+    const [min, max, step] = RANGE[key]; v = Math.max(min, Math.min(max, Math.round(v / step) * step)); if (v === D.cfg[key]) return true;
+    D.cfg[key] = v; if (KUI[key]) KUI[key](); shell.save(); if (b.d.chem) b.d.chem.show(b); sync3D(); syncRead(); return true;
+  }
+  lab.on('knob', (bid, key, v) => setKnob(key, v)); // bàn 2D: kéo núm trên sơ đồ
+  dials3d = MODE2D ? null : connectDials(lab, BID, { set: setKnob, get: (k) => D.cfg[k], range: (k) => RANGE[k] }); // bàn 3D: kéo kim đồng hồ, vặn vô lăng ngay trên sa bàn
   function knob(key, i) {
     const [name, unit, hint] = KNOB[key], [min, max, step] = RANGE[key], can = SLIDE[i].includes(key);
     const out = h('output'), el = h('div', { class: 'sb-knob' + (can ? '' : ' is-off') });
     const show = () => { const v = D.cfg[key]; out.textContent = key === 'r' ? `${num(v, 1)} ${unit}` : `${num(v)} ${unit}`; el.classList.toggle('is-book', (key === 'T' && v >= BOOK.T[0] && v <= BOOK.T[1]) || (key === 'p' && v >= BOOK.p[0] && v <= BOOK.p[1])); };
     const input = h('input', { type: 'range', min, max, step, value: D.cfg[key], disabled: !can || null, 'aria-label': name,
       oninput: (e) => { D.cfg[key] = Number(e.target.value); show(); shell.save(); const b = B(); if (b.d.chem) b.d.chem.show(b); sync3D(); syncRead(); } });
+    KUI[key] = () => { input.value = D.cfg[key]; show(); }; // núm trên máy đổi số thì thanh kéo chạy theo
     put(el, h('label', { text: name }), out, input, h('small', { text: can ? hint : hint + ' · bước này giữ nguyên' })); show();
     return el;
   }
   function renderPanel(i, host) {
     const cells = [0, 1, 2].map(() => vcard()), label = h('span'), big = h('b'), unit = h('em'), proc = h('div', { class: 'hg-compact' });
-    put(host, ph('Bảng điều khiển', i === 0 ? (MODE2D ? 'Bước này chỉ xem sơ đồ' : 'Bước này chỉ xem sa bàn') : `Kéo thanh để đặt nhà máy, rồi làm việc cùng số trên ${MODE2D ? 'sơ đồ' : 'sa bàn'}`),
+    put(host, ph('Bảng điều khiển', i === 0 ? (MODE2D ? 'Bước này chỉ xem sơ đồ' : 'Bước này chỉ xem sa bàn') : `Kéo kim đồng hồ, vặn van ngay trên ${MODE2D ? 'sơ đồ' : 'sa bàn'}, hoặc kéo thanh ở đây`),
       h('div', { class: 'lk-read sb-read' }, label, h('div', {}, big, unit)),
       h('div', { class: 'lk-vcards' }, cells.map((c) => c.el)),
       // Bước không chỉnh con số nào (xem sa bàn, xúc tác): ghi cài đặt thành một dòng, nhường chỗ cho danh sách việc
@@ -249,7 +264,7 @@ export function createLesson(shell) {
     }
     Object.assign(D.cfg, LOCK[i] || {});
     S.replaying = true;
-    lab.setup(BID, { step: i, cfg: D.cfg, target: goalOf(), lastRow: lastRow() });
+    lab.setup(BID, { step: i, cfg: D.cfg, slide: SLIDE[i], target: goalOf(), lastRow: lastRow() }); if (dials3d) dials3d.sync(SLIDE[i]);
     const t = D.tog; lab.preset(BID, [t.valve && ['valve'], t.cut && ['cut'], !t.cat && ['cat'], t.sep && ['sep'], t.loop && ['loop']].filter(Boolean));
     S.seenN = 0; S.replaying = false;
     const b = B(); if (b.d.chem) b.d.chem.show(b);
