@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" font-family="IBM Plex Sans, Segoe UI, system-ui, sans-serif">
+  <title>Sơ đồ khối một nhà máy đạm: khí thiên nhiên, H₂, tháp tổng hợp NH₃, ngưng tụ, urea, có vòng tuần hoàn khí</title>
+  <rect width="960" height="540" fill="#f5f7fa"/>
+  <text x="480" y="52" text-anchor="middle" font-size="26" font-weight="600" fill="#14223a">Một nhà máy đạm làm NH₃ rồi làm urea như thế nào</text>
+  <text x="480" y="82" text-anchor="middle" font-size="16" fill="#5d6675">Sơ đồ khối tự vẽ để dạy học, không theo bản vẽ của nhà máy nào</text>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5d6675"/></marker><marker id="o" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#e07b2a"/></marker></defs>
+  <g font-size="18" font-weight="600" fill="#14223a" text-anchor="middle">
+    <rect x="30" y="250" width="150" height="96" rx="14" fill="#eef2f4" stroke="#5d6b78" stroke-width="2"/><text x="105" y="292">Khí thiên nhiên</text><text x="105" y="318" font-size="14" font-weight="400" fill="#5d6675">nguồn H₂</text>
+    <rect x="220" y="250" width="130" height="96" rx="14" fill="#ffffff" stroke="#5d6b78" stroke-width="2"/><text x="285" y="292">H₂</text><text x="285" y="318" font-size="14" font-weight="400" fill="#5d6675">+ N₂ từ không khí</text>
+    <rect x="390" y="196" width="150" height="204" rx="28" fill="#f6c27a" stroke="#8a5a12" stroke-width="2"/><text x="465" y="270">Tháp tổng hợp</text><text x="465" y="298" font-size="15" font-weight="400" fill="#4a3208">xúc tác Fe</text><text x="465" y="322" font-size="15" font-weight="400" fill="#4a3208">N₂ + 3H₂ ⇌ 2NH₃</text>
+    <rect x="580" y="250" width="140" height="96" rx="14" fill="#dff0fb" stroke="#2f8fd0" stroke-width="2"/><text x="650" y="292">Ngưng tụ</text><text x="650" y="318" font-size="14" font-weight="400" fill="#16669c">tách NH₃ lỏng</text>
+    <rect x="760" y="250" width="170" height="96" rx="14" fill="#e1f5ee" stroke="#0f6e56" stroke-width="2"/><text x="845" y="292">Urea</text><text x="845" y="318" font-size="14" font-weight="400" fill="#085041">NH₃ + CO₂</text>
+  </g>
+  <g stroke="#5d6675" stroke-width="3" fill="none" marker-end="url(#a)"><path d="M180 298 H214"/><path d="M350 298 H384"/><path d="M540 298 H574"/><path d="M720 298 H754"/></g>
+  <path d="M650 250 V150 H300 V244" fill="none" stroke="#e07b2a" stroke-width="5" marker-end="url(#o)"/>
+  <text x="475" y="138" text-anchor="middle" font-size="17" font-weight="600" fill="#a4500f">Khí chưa phản ứng quay lại (tuần hoàn)</text>
+  <text x="480" y="456" text-anchor="middle" font-size="17" fill="#14223a">Mỗi lượt qua tháp chỉ một phần khí thành NH₃. Phần còn lại được đưa quay lại tháp.</text>
+  <text x="480" y="486" text-anchor="middle" font-size="15" fill="#5d6675">Em là kĩ sư trực ca: chọn nhiệt độ, áp suất cho tháp để đủ sản lượng của ngày.</text>
+</svg>
