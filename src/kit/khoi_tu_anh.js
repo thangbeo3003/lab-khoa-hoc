@@ -14,12 +14,16 @@ export const coKhoi = (key) => !!(META[key] && (META[key].lathe || META[key].lat
 
 // size: chiều cao (món đứng) hoặc chiều dài (món nằm) của CẢ ảnh theo đơn vị bàn.
 // Trả { geo, mat, s, r (bán kính thân), y0, y1 (đoạn có thân, món đứng), toY(px), toX(px) } ; món đứng: gốc ở đáy ảnh, trục y. Món nằm: tâm ở giữa, trục x.
-export function hinhTuAnh(key, size, { phiStart = 0, phiLength = Math.PI * 2, seg = 56, rScale = 1, mat = {} } = {}) {
+// sang (0..0,4): nâng sáng ảnh dán (ảnh tự phát sáng nhẹ) để thân thiết bị sáng trung tính, điểm màu chức năng nổi lên (DEFINE_SA_BAN 10.5).
+// vat (27/11 khuya, DEFINE_SA_BAN 10.8): chất liệu có sẵn của bảng chung. Có vat thì KHÔNG dán ảnh: lấy hình dáng từ ảnh, bề mặt đồng bộ với mọi khối khác.
+export function hinhTuAnh(key, size, { phiStart = 0, phiLength = Math.PI * 2, seg = 40, rScale = 1, sang = 0, mat = {}, vat = null } = {}) {
   const m = META[key], lying = !m.lathe, P = m.lathe || m.latheX, a0 = lying ? m.left : m.top, a1 = lying ? m.right : m.bottom, s = size / (a1 - a0);
   let pts = P.map(([q, r]) => [lying ? (q - a0) * s : (a1 - q) * s, r * s * rScale]);
   if (!lying) pts.reverse();
   while (pts.length > 2 && pts[0][1] <= 0) pts.shift(); // bỏ phần không có thân (chân đế tách rời) ở hai đầu
   while (pts.length > 2 && pts[pts.length - 1][1] <= 0) pts.pop();
+  // Thưa bớt điểm đường viền (tối đa khoảng 150 điểm): giữ điểm đầu, cuối và mọi điểm mà bán kính đổi rõ, để khối nhẹ mà mặt bích, chỏm vẫn đúng dáng
+  if (pts.length > 150) { const step = Math.ceil(pts.length / 110), rmax = Math.max(...pts.map((q) => q[1])); let last = pts[0]; pts = pts.filter((q, i) => { const keep = i === 0 || i === pts.length - 1 || i % step === 0 || Math.abs(q[1] - last[1]) > rmax * 0.03; if (keep) last = q; return keep; }); }
   const y0 = pts[0][0], y1 = pts[pts.length - 1][0];
   const v2 = [new T.Vector2(0.0005, y0), ...pts.map(([h, r]) => new T.Vector2(Math.max(r, 0.0005), h)), new T.Vector2(0.0005, y1)];
   const geo = new T.LatheGeometry(v2, seg, phiStart, phiLength);
@@ -32,7 +36,7 @@ export function hinhTuAnh(key, size, { phiStart = 0, phiLength = Math.PI * 2, se
   }
   if (lying) geo.translate(-size / 2, 0, 0);
   geo.computeVertexNormals();
-  const material = new T.MeshStandardMaterial({ map: texOf(key), roughness: 0.5, metalness: 0.18, alphaTest: 0.5, envMapIntensity: 0.9, ...mat });
+  const material = vat || new T.MeshStandardMaterial({ map: texOf(key), roughness: 0.5, metalness: 0.18, alphaTest: 0.5, envMapIntensity: 0.9, ...(sang ? { emissive: 0xffffff, emissiveMap: texOf(key), emissiveIntensity: sang } : {}), ...mat });
   return { geo, mat: material, s, r: (m.latheBody || 0) * s * rScale, y0, y1, toY: (py) => (a1 - py) * s, toX: (px) => (px - m.cx) * s * rScale };
 }
 
@@ -54,3 +58,15 @@ export function vanKimLoai() {
   return VAN;
 }
 export function phuVan(mat, { bump = 0.012 } = {}) { const v = vanKimLoai(); mat.roughnessMap = v; mat.bumpMap = v; mat.bumpScale = bump; mat.needsUpdate = true; return mat; }
+
+// Vân sơn bẩn nhẹ làm bản đồ MÀU (nhân với màu sơn): vệt dọc do mưa, đốm nhỏ, mép ô tối hơn chút. Giống cách các sa bàn mẫu làm cho mặt sơn trắng không phẳng lì.
+let SON = null;
+export function vanSon() {
+  if (SON) return SON;
+  const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); x.fillStyle = '#ffffff'; x.fillRect(0, 0, 256, 256);
+  let seed = 11; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 60; i++) { const px = rnd() * 256, w = 1 + rnd() * 3, g = x.createLinearGradient(0, 0, 0, 256); g.addColorStop(0, 'rgba(120,110,100,0)'); g.addColorStop(rnd(), `rgba(120,110,100,${0.04 + rnd() * 0.05})`); g.addColorStop(1, 'rgba(120,110,100,0)'); x.fillStyle = g; x.fillRect(px, 0, w, 256); }
+  for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(90,85,80,${rnd() * 0.06})`; x.fillRect(rnd() * 256, rnd() * 256, 1 + rnd() * 2, 1 + rnd() * 2); }
+  SON = new T.CanvasTexture(c); SON.colorSpace = T.SRGBColorSpace; SON.wrapS = SON.wrapT = T.RepeatWrapping; SON.repeat.set(2, 2);
+  return SON;
+}

@@ -819,7 +819,7 @@ export function createLab(host, decl) {
   const partBoxes = (it) => {
     let c = AV.boxes.get(it); if (c) return c;
     const o = it.obj, p = o.getWorldPosition(V3()); c = []; o.updateWorldMatrix(true, true);
-    o.children.forEach((ch) => { if (!ch.visible) return; BX.setFromObject(ch); if (BX.isEmpty() || BX.max.y - BX.min.y < 0.05) return; c.push([BX.min.clone().sub(p), BX.max.clone().sub(p)]); });
+    o.children.forEach((ch) => { if (!ch.visible || ch.userData.noFit) return; /* noFit (27/11): phần bối cảnh của sa bàn (đất, cây, đường) không kéo khung máy quay ra xa */ BX.setFromObject(ch); if (BX.isEmpty() || BX.max.y - BX.min.y < 0.05) return; c.push([BX.min.clone().sub(p), BX.max.clone().sub(p)]); });
     AV.boxes.set(it, c); return c;
   };
   const boxRect = (p, a, b, w, h) => {

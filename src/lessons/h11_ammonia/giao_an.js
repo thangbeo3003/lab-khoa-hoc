@@ -83,7 +83,7 @@ export const lab = {
     { id: 'haber', name: 'Sa bàn · Nhà máy tổng hợp NH₃', short: 'Nhà máy NH₃', color: '#0e7490', at: [0, 0], w: 10.4, d: 5.0, tagY: 4.6, tagFocus: true,
       eq: 'N₂ + 3H₂ ⇌ 2NH₃', cond: 'phản ứng toả nhiệt · xúc tác Fe · số trên bảng là số tính của bài',
       text: 'Sa bàn một dây chuyền tổng hợp ammonia: hai bình khí N₂ và H₂, máy nén, tháp tổng hợp có ba tầng xúc tác sắt, thiết bị làm lạnh, bình chứa NH₃ lỏng. Ống vòng phía sau đưa khí chưa phản ứng quay lại máy nén.',
-      view: { target: [0, 1.6, 0], w: 9.9, h: 4.6, el: 24, az: -8, swing: 80, elMin: 5, elMax: 62 },
+      view: { target: [0, 1.6, 0], w: 9.9, h: 4.6, el: 30, az: -10, fov: 22, swing: 80, elMin: 5, elMax: 62 }, // 10.9: nhìn xuống 30°, góc hẹp 22° (gần như phối cảnh song song), bớt méo kiểu đồ chơi
       items: [
         { id: 'base', kind: 'stand', at: AT.base },
         { id: 'pipes', kind: 'gaswash', at: AT.pipes, role: 'ống trong suốt để thấy dòng khí: chấm xanh dương là N₂, chấm trắng là H₂, chấm xanh ngọc là NH₃' },

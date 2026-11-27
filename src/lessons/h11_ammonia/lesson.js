@@ -5,7 +5,7 @@ import { h } from '../../shell/shell.js';
 import { procList, bindSafeArea, vcard, tuckHandles, zoomBox } from '../../shell/labui.js';
 import { createLab } from '../../kit/labset.js';
 import { meta, steps, lab as DECL, SUMMARY, SAFETY, cfgOf, REF, RANGE, BOOK, TARGET, RUN_S } from './giao_an.js';
-import { declaration, LEGEND, connectDials } from './sa_ban.js';
+import { declaration, LEGEND, connectDials, datCanh } from './sa_ban.js';
 import { xEq, pct, inBook } from './mo_hinh.js';
 import { createChart, CHART_CSS } from './do_thi.js';
 import { MECH } from './be_mat_fe.js';
@@ -63,7 +63,7 @@ export function createLesson(shell) {
   const lab = MODE2D ? createLab2d(shell.els.stage, declaration2d(DECL)) : createLab(shell.els.stage, declaration(DECL)), stage = lab.stage;
   shell.els.stage.closest('.lk').classList.add('is-v3');
   let dials3d = null; // núm kéo trên sa bàn 3D (gán ở dưới, sau khi có setKnob)
-  if (!MODE2D && stage.renderer) stage.renderer.toneMappingExposure = 1.1; // sa bàn: hạ độ sáng (mặc định 1,3) để mặt thép còn tương phản, không lì như nhựa (27/11)
+  if (!MODE2D) datCanh(stage); // sa bàn có cảnh: phông xa, sương, độ sáng 0,98 // sa bàn: hạ độ sáng (mặc định 1,3) để mặt thép còn tương phản, không lì như nhựa (27/11)
   if (!document.getElementById('sb-css')) document.head.append(h('style', { id: 'sb-css', text: CSS + CHART_CSS }));
   const D = shell.state.data; // phần được lưu
   D.done = D.done || {}; D.reveal = D.reveal || {}; D.rows = D.rows || []; D.entered = D.entered || {};
