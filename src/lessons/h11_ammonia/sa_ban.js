@@ -1,10 +1,13 @@
 // SA BÀN nhà máy tổng hợp ammonia (CHEM11-04), dựng KHỐI bằng mã. Hướng chủ duyệt 27/11 (DEFINE_SA_BAN.md):
 // mô hình trưng bày đặt trên bàn trong phòng lab, có việc làm bằng tay ngay trên mô hình, ống trong suốt để thấy dòng khí.
 // Các khu theo tài liệu STEMLabs (docs/research/hoa-hoc.md mục CHEM11-04): bình N₂, bình H₂ · máy nén · tháp tổng hợp có xúc tác Fe · làm lạnh ngưng tụ NH₃ · đường tuần hoàn.
+// CHẤT LIỆU (chủ 27/11 "Làm cách ghép"): bình khí, tháp, bồn NH₃, bộ làm lạnh là khối tròn xoay dựng theo đường viền ẢNH KHO 2D và dán chính ảnh đó
+// (kit/khoi_tu_anh.js), nên 3D và 2D là cùng một món đồ thật; máy nén, van, khung phủ vân kim loại (phuVan) và thêm bu lông, mặt bích.
 // Hình dáng là sơ đồ dạy học, không theo bản vẽ nhà máy nào. Mỗi khu là một món của bàn (kit/labset.js), trạng thái đặt qua userData.set(...) do lesson.js gọi.
 import * as T from 'three';
 import { canvasTexture } from '../../kit/materials.js';
 import { pose, createUnit, mulberry, PATCHES, SLAB_R, RAD, YFE } from './be_mat_fe.js';
+import { khoiTuAnh, coKhoi, phuVan } from '../../kit/khoi_tu_anh.js';
 
 export const PL = 0.3; // chiều cao đế trưng bày; mọi khu đứng trên mặt đế
 export const AT = { base: [0, 0, 0], feed: [-3.45, PL, 0.05], comp: [-1.9, PL, 0.55], tower: [0, PL, -0.05], catbox: [-0.95, PL, 1.15], cool: [1.7, PL, 0.55], sep: [3.25, PL, 0.05], loop: [1.0, PL, -1.2], panel: [2.55, PL, 1.3], pipes: [0, PL, 0], lens: [1.45, PL + 3.0, 1.45] };
@@ -20,11 +23,19 @@ const M = {
   yellow: std('#e3b23c', { roughness: 0.5 }), concrete: std('#aeb6b8', { roughness: 0.9 }), wood: std('#3b2f27', { roughness: 0.6 }), top: std('#e4e8ea', { roughness: 0.8 }), brass: std('#c9a14a', { metalness: 0.8, roughness: 0.35 }),
   glass: new T.MeshStandardMaterial({ color: '#8fb4c6', roughness: 0.12, transparent: true, opacity: 0.46, depthWrite: false }), teal: std('#12a089', { roughness: 0.42, metalness: 0.2 }),
 };
+['steel', 'dark', 'shell', 'blue', 'white', 'teal', 'yellow', 'brass'].forEach((k) => phuVan(M[k]));
+const BOLT = std('#9aa6ad', { metalness: 0.9, roughness: 0.3 });
 function add(parent, geo, mat, x = 0, y = 0, z = 0) { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = !mat.transparent; parent.add(m); return m; }
 const cyl = (r, h, seg = 32, r2 = r) => new T.CylinderGeometry(r2, r, h, seg);
+// Chữ trên khối vẽ bằng canvas: phải chờ IBM Plex nạp xong, nếu không trình duyệt vẽ bằng phông hệ thống (đậm giả, lệch kiểu: chủ 27/11 chê "trông hơi tệ").
+// Vẽ ngay một lần, rồi vẽ lại khi ba độ đậm 400/500/600 đã sẵn sàng.
+const FONT_READY = typeof document !== 'undefined' && document.fonts ? Promise.all(['400', '500', '600'].map((w) => document.fonts.load(`${w} 40px "IBM Plex Sans"`, 'ĐNH₃'))).catch(() => {}) : null;
+function textTexture(w, h, draw) { const t = canvasTexture(w, h, draw); if (FONT_READY) FONT_READY.then(() => { const c = t.image.getContext('2d'); c.clearRect(0, 0, w, h); draw(c, w, h); t.needsUpdate = true; }); return t; }
+// Huy hiệu số của khu: chấm tròn màu khu, số trắng (thay ký tự ①②, vốn vẽ bằng phông khác)
+function badge(c, x, y, r, no, color) { c.fillStyle = color; c.beginPath(); c.arc(x, y, r, 0, 6.2832); c.fill(); c.fillStyle = '#ffffff'; c.font = `600 ${r * 1.15}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(no, x, y + r * 0.06); }
 const safe = (dt) => (dt > 0 && dt < 1 ? dt : 0); // bộ máy có lúc gọi update không kèm dt (dựng lại bàn): coi như không trôi thời gian
 function plate(text, w, h, { bg = '#1c2a33', fg = '#f4f7f8', size = 0.56, sub = '' } = {}) {
-  const tex = canvasTexture(Math.round(512 * (w / h)), 512, (c, W, H) => { c.fillStyle = bg; c.fillRect(0, 0, W, H); c.fillStyle = fg; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `600 ${H * size}px ${FONT}`; c.fillText(text, W / 2, sub ? H * 0.42 : H / 2, W * 0.94); if (sub) { c.font = `500 ${H * 0.22}px ${FONT}`; c.fillText(sub, W / 2, H * 0.8, W * 0.94); } });
+  const tex = textTexture(Math.round(512 * (w / h)), 512, (c, W, H) => { c.fillStyle = bg; c.fillRect(0, 0, W, H); c.fillStyle = fg; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `600 ${H * size}px ${FONT}`; c.fillText(text, W / 2, sub ? H * 0.42 : H / 2, W * 0.94); if (sub) { c.font = `500 ${H * 0.22}px ${FONT}`; c.fillText(sub, W / 2, H * 0.8, W * 0.94); } });
   return new T.Mesh(new T.PlaneGeometry(w, h), new T.MeshBasicMaterial({ map: tex, toneMapped: false }));
 }
 // Vỏ bình đứng: thân trụ + hai chỏm cầu
@@ -33,6 +44,8 @@ function vessel(parent, r, h, mat, y0 = 0) {
   const top = add(parent, new T.SphereGeometry(r, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat, 0, y0 + h, 0); top.scale.y = 0.55;
   const bot = add(parent, new T.SphereGeometry(r, 32, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mat, 0, y0, 0); bot.scale.y = 0.55;
 }
+// Vòng bu lông quanh mặt bích (trục đứng; xoay nhóm để đặt nằm)
+function bolts(parent, r, y, n = 10, size = 0.028) { const g = new T.Group(); g.position.y = y; parent.add(g); for (let i = 0; i < n; i++) { const a = (i / n) * 6.2832; add(g, cyl(size, size * 0.9, 6), BOLT, Math.cos(a) * r, 0, Math.sin(a) * r); } return g; }
 function legs(parent, r, h, n = 3) { for (let i = 0; i < n; i++) { const a = (i / n) * 6.283 + 0.5; add(parent, cyl(0.035, h, 10), M.dark, Math.cos(a) * r, h / 2, Math.sin(a) * r); } }
 // Tay van: vô lăng trên trục; set(k) xoay theo mức mở, đèn báo xanh khi mở
 function valveWheel(parent, x, y, z, color) {
@@ -52,20 +65,28 @@ function valveWheel(parent, x, y, z, color) {
 export function makeBase({ w = 9.4, d = 4.0, studio = true } = {}) {
   const g = new T.Group();
   add(g, new T.BoxGeometry(w, PL - 0.04, d), M.wood, 0, (PL - 0.04) / 2, 0);
-  const zones = [['①', 'Khí nguyên liệu', -3.45, 1.7, '#dbe7f5'], ['②', 'Nén', -1.9, 1.25, '#e3e6ea'], ['③', 'Tháp tổng hợp', 0, 2.1, '#f6e3d4'], ['④', 'Làm lạnh', 1.7, 1.25, '#d9f0f4'], ['⑤', 'Tách NH₃ lỏng', 3.25, 1.75, '#d8f3ea']];
+  // [số, tên, tâm x, bề rộng khu, màu nền nhạt trên mặt đế, màu nhấn của khu (huy hiệu số, vạch dưới tên)]
+  const zones = [['1', 'Khí nguyên liệu', -3.45, 1.7, '#e3ecf7', '#3d6fe0'], ['2', 'Nén', -1.9, 1.25, '#e7eaee', '#6b7884'], ['3', 'Tháp tổng hợp', 0, 2.1, '#f7e8dc', '#e07b2a'], ['4', 'Làm lạnh', 1.7, 1.25, '#e0f1f6', '#2f8fd0'], ['5', 'Tách NH₃ lỏng', 3.25, 1.75, '#ddf4ec', '#139f86']];
   const RIM = 0.17, tw = w - 2 * RIM, td = d - 2 * RIM; // viền gỗ quanh mặt đế: trên nền trơn vẫn thấy rõ đây là một tấm đế
-  const tex = canvasTexture(2048, Math.round((2048 * td) / tw), (c, W, H) => {
+  const tex = textTexture(2048, Math.round((2048 * td) / tw), (c, W, H) => {
     const px = (x) => ((x + tw / 2) / tw) * W, s = W / tw; c.fillStyle = '#f4f6f7'; c.fillRect(0, 0, W, H);
-    zones.forEach(([no, , x, zw, color]) => { c.fillStyle = color; c.beginPath(); c.roundRect(px(x - zw / 2), H * 0.2, zw * s, H * 0.76, 22); c.fill(); c.fillStyle = '#24323b99'; c.font = `600 ${H * 0.085}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(no, px(x), H * 0.905); });
+    zones.forEach(([no, , x, zw, color, acc]) => { c.fillStyle = color; c.beginPath(); c.roundRect(px(x - zw / 2), H * 0.2, zw * s, H * 0.76, 22); c.fill(); badge(c, px(x), H * 0.9, H * 0.042, no, acc); });
   });
   const top = add(g, new T.BoxGeometry(tw, 0.04, td), [M.top, M.top, new T.MeshStandardMaterial({ map: tex, roughness: 0.82 }), M.top, M.top, M.top], 0, PL - 0.015, 0); top.castShadow = false;
   // Dải nghiêng mép trước: mặt ngả ra sau 40 độ nên nhìn từ khung chuẩn gần như thẳng góc, chữ to gấp đôi so với in trên mặt đứng của đế
   const slant = 0.4, tilt = (40 * Math.PI) / 180, a = slant * Math.sin(tilt), bH = slant * Math.cos(tilt);
   const wedge = new T.ExtrudeGeometry(new T.Shape([new T.Vector2(0, PL - 0.005), new T.Vector2(a, PL - bH), new T.Vector2(0, PL - bH)]), { depth: w, bevelEnabled: false });
   wedge.rotateY(-Math.PI / 2); wedge.translate(w / 2, 0, d / 2); add(g, wedge, M.wood);
-  const names = canvasTexture(4096, Math.round((4096 * slant) / w), (c, W, H) => {
-    const px = (x) => ((x + w / 2) / w) * W, s = W / w; c.fillStyle = '#33291f'; c.fillRect(0, 0, W, H);
-    zones.forEach(([no, name, x, zw, color]) => { c.fillStyle = color; c.beginPath(); c.roundRect(px(x - zw / 2) + 10, H * 0.12, zw * s - 20, H * 0.76, H * 0.2); c.fill(); c.fillStyle = '#1c2a33'; c.font = `600 ${H * 0.5}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(`${no} ${name}`, px(x), H * 0.53, zw * s - 44); });
+  const names = textTexture(4096, Math.round((4096 * slant) / w), (c, W, H) => {
+    // Dải tên kiểu bảng chú thích tủ trưng bày: nền gỗ sẫm đều màu, viền sáng mảnh ở mép trên; mỗi khu = huy hiệu số + tên chữ kem, một cỡ, một độ đậm, canh giữa khu
+    const px = (x) => ((x + w / 2) / w) * W, s = W / w, g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#3a3027'); g.addColorStop(1, '#2a221b'); c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.fillStyle = 'rgba(255,240,220,0.16)'; c.fillRect(0, 0, W, Math.max(2, H * 0.03));
+    zones.forEach(([no, name, x, zw, , acc]) => {
+      const fs = H * 0.47, r = H * 0.22, gap = H * 0.15; c.font = `500 ${fs}px ${FONT}`; const tw2 = Math.min(c.measureText(name).width, zw * s - 2 * r - gap - H * 0.5), total = 2 * r + gap + tw2, x0 = px(x) - total / 2, cy = H * 0.5;
+      badge(c, x0 + r, cy, r, no, acc);
+      c.font = `500 ${fs}px ${FONT}`; c.fillStyle = '#f3ece2'; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(name, x0 + 2 * r + gap, cy + fs * 0.04, tw2);
+      c.fillStyle = acc; c.globalAlpha = 0.85; c.fillRect(x0 + 2 * r + gap, cy + fs * 0.62, Math.min(tw2, fs * 1.6), Math.max(2, H * 0.035)); c.globalAlpha = 1; // vạch màu khu ngắn dưới tên
+    });
   });
   const rail = new T.Mesh(new T.PlaneGeometry(w, slant), new T.MeshBasicMaterial({ map: names, toneMapped: false }));
   rail.position.set(0, PL - bH / 2 + 0.002, d / 2 + a / 2 + 0.002); rail.rotation.x = -tilt; g.add(rail);
@@ -80,10 +101,15 @@ export function makeBase({ w = 9.4, d = 4.0, studio = true } = {}) {
 export function makeFeed() {
   const g = new T.Group();
   [[-0.45, M.blue, 'N₂'], [0.45, M.white, 'H₂']].forEach(([x, mat, name]) => {
-    const t = new T.Group(); t.position.set(x, 0, 0); g.add(t); legs(t, 0.26, 0.2);
-    const b = new T.Group(); b.position.y = 0.26; t.add(b); vessel(b, 0.34, 1.15, mat);
-    const lab = plate(name, 0.42, 0.3, { bg: '#ffffff', fg: '#16324f', size: 0.7 }); lab.position.set(0, 0.92, 0.345); t.add(lab);
-    add(t, cyl(0.045, 0.34, 12), M.steel, 0, 0.26 + 1.15 + 0.3, 0);
+    const t = new T.Group(); t.position.set(x, 0, 0); g.add(t); const key = name === 'N₂' ? 'gas_cyl_n2' : 'gas_cyl_h2';
+    if (coKhoi(key)) { // bình khí thật (ảnh LAB-014): cao 1,95, nong 1,6 lần cho vừa ống góp của sa bàn
+      const K = khoiTuAnh(key, 1.95, { rScale: 1.6, mat: { metalness: 0.3, roughness: 0.42 } }); t.add(K.mesh);
+      const lab = plate(name, 0.3, 0.22, { bg: name === 'N₂' ? COL.N : '#ffffff', fg: name === 'N₂' ? '#ffffff' : '#16324f', size: 0.7 }); lab.position.set(0, 0.95, K.r + 0.012); t.add(lab);
+    } else {
+      legs(t, 0.26, 0.2); const b = new T.Group(); b.position.y = 0.26; t.add(b); vessel(b, 0.34, 1.15, mat);
+      const lab = plate(name, 0.42, 0.3, { bg: '#ffffff', fg: '#16324f', size: 0.7 }); lab.position.set(0, 0.92, 0.345); t.add(lab);
+      add(t, cyl(0.045, 0.34, 12), M.steel, 0, 0.26 + 1.15 + 0.3, 0);
+    }
     const out = add(t, cyl(0.045, 0.5, 12), M.steel, 0, 0.42, 0.42); out.rotation.x = Math.PI / 2;
   });
   const man = add(g, cyl(0.05, 1.2, 12), M.steel, 0, 0.42, 0.66); man.rotation.z = Math.PI / 2;
@@ -100,7 +126,8 @@ export function makeComp() {
   const motor = add(g, cyl(0.24, 0.55, 28), M.blue, -0.36, 0.38, 0); motor.rotation.z = Math.PI / 2;
   for (let i = 0; i < 5; i++) { const f = add(g, new T.TorusGeometry(0.245, 0.012, 6, 28), M.dark, -0.56 + i * 0.1, 0.38, 0); f.rotation.y = Math.PI / 2; }
   add(g, new T.BoxGeometry(0.52, 0.56, 0.56), M.teal, 0.3, 0.38, 0);
-  add(g, cyl(0.16, 0.34, 24), M.steel, 0.3, 0.8, 0);
+  add(g, cyl(0.16, 0.34, 24), M.steel, 0.3, 0.8, 0); add(g, cyl(0.19, 0.05, 28), M.dark, 0.3, 0.98, 0); const cb = bolts(g, 0.165, 1.01, 8, 0.022); cb.position.x = 0.3;
+  [[-0.6, 0.35], [0.6, 0.35], [-0.6, -0.35], [0.6, -0.35]].forEach(([x, z]) => add(g, cyl(0.03, 0.04, 6), BOLT, x, 0.12, z));
   const fly = new T.Group(); fly.position.set(0.3, 0.38, 0.33); g.add(fly);
   const disc = add(fly, cyl(0.26, 0.06, 32), M.dark); disc.rotation.x = Math.PI / 2;
   [0, 1, 2].forEach((i) => { const s = add(fly, new T.BoxGeometry(0.46, 0.05, 0.02), M.yellow, 0, 0, 0.035); s.rotation.z = (i / 3) * Math.PI; });
@@ -116,15 +143,22 @@ export function makeComp() {
 // ---------- ③ Tháp tổng hợp: nửa vỏ trước mở ra như cánh cửa, bên trong ba tầng xúc tác Fe nóng sáng theo nhiệt độ ----------
 export function makeTower({ h = 3.0 } = {}) {
   const g = new T.Group(), r = 0.46, y0 = 0.22;
-  add(g, cyl(0.56, y0, 36, 0.5), M.concrete, 0, y0 / 2, 0);
-  const half = (start) => new T.CylinderGeometry(r, r, h, 40, 1, true, start, Math.PI);
-  add(g, half(Math.PI / 2), M.shell, 0, y0 + h / 2, 0);                                   // nửa vỏ sau: đứng yên
-  const dome = add(g, new T.SphereGeometry(r, 36, 14, 0, Math.PI * 2, 0, Math.PI / 2), M.shell, 0, y0 + h, 0); dome.scale.y = 0.6;
-  add(g, cyl(0.07, 0.3, 14), M.steel, 0, y0 + h + 0.36, 0);
   const door = new T.Group(); door.position.set(-r, 0, 0); g.add(door);                    // bản lề ở mép trái
-  add(door, half(-Math.PI / 2), M.shell, r, y0 + h / 2, 0);
-  [0.5, 1.45, 2.4].forEach((y) => { const a = add(g, new T.TorusGeometry(r + 0.012, 0.035, 8, 28, Math.PI), M.steel, 0, y0 + y, 0); a.rotation.x = Math.PI / 2; a.rotation.z = Math.PI; const b = add(door, new T.TorusGeometry(r + 0.012, 0.035, 8, 28, Math.PI), M.steel, r, y0 + y, 0); b.rotation.x = Math.PI / 2; });
-  const handle = add(door, new T.BoxGeometry(0.05, 0.4, 0.08), M.yellow, r * 2 - 0.03, y0 + 1.5, 0.06); void handle;
+  if (coKhoi('reactor_column')) { // tháp thật (ảnh reactor_column): hai nửa vỏ dựng theo đường viền ảnh, cao trọn 3,62; lòng vỏ sơn tối để thấy rõ ba tầng Fe khi mở
+    const size = y0 + h + 0.4, rs = r / (khoiTuAnh('reactor_column', size).r || r) * 1.0;
+    const back = khoiTuAnh('reactor_column', size, { phiStart: Math.PI / 2, phiLength: Math.PI, rScale: rs, mat: { side: T.DoubleSide, metalness: 0.35, roughness: 0.42 } }); g.add(back.mesh);
+    const front = khoiTuAnh('reactor_column', size, { phiStart: -Math.PI / 2, phiLength: Math.PI, rScale: rs, mat: { side: T.DoubleSide, metalness: 0.35, roughness: 0.42 } }); front.mesh.position.x = r; door.add(front.mesh);
+    const lining = std('#2a3238', { roughness: 0.8, side: T.BackSide }); [[back, g, 0], [front, door, r]].forEach(([K, par, x]) => { const L = new T.Mesh(K.geo, lining); L.scale.set(0.985, 1, 0.985); L.position.x = x; par.add(L); });
+  } else {
+    add(g, cyl(0.56, y0, 36, 0.5), M.concrete, 0, y0 / 2, 0);
+    const half = (start) => new T.CylinderGeometry(r, r, h, 40, 1, true, start, Math.PI);
+    add(g, half(Math.PI / 2), M.shell, 0, y0 + h / 2, 0);                                   // nửa vỏ sau: đứng yên
+    const dome = add(g, new T.SphereGeometry(r, 36, 14, 0, Math.PI * 2, 0, Math.PI / 2), M.shell, 0, y0 + h, 0); dome.scale.y = 0.6;
+    add(g, cyl(0.07, 0.3, 14), M.steel, 0, y0 + h + 0.36, 0);
+    add(door, half(-Math.PI / 2), M.shell, r, y0 + h / 2, 0);
+    [0.5, 1.45, 2.4].forEach((y) => { const a = add(g, new T.TorusGeometry(r + 0.012, 0.035, 8, 28, Math.PI), M.steel, 0, y0 + y, 0); a.rotation.x = Math.PI / 2; a.rotation.z = Math.PI; const b = add(door, new T.TorusGeometry(r + 0.012, 0.035, 8, 28, Math.PI), M.steel, r, y0 + y, 0); b.rotation.x = Math.PI / 2; });
+  }
+  const handle = add(door, new T.BoxGeometry(0.05, 0.4, 0.08), M.yellow, r * 2 + 0.02, y0 + 1.5, 0.06); void handle;
   const hot = new T.MeshStandardMaterial({ color: '#3a3f44', roughness: 0.95, emissive: '#ff5a12', emissiveIntensity: 0 });
   const beds = [0.62, 1.48, 2.34].map((y) => { add(g, cyl(r - 0.03, 0.03, 32), M.steel, 0, y0 + y - 0.27, 0); const b = add(g, cyl(r - 0.05, 0.5, 32), hot, 0, y0 + y, 0); b.castShadow = false; return b; });
   const pellets = new T.Group(); g.add(pellets); // hạt xúc tác rải trên mặt mỗi tầng để thấy đây là lớp hạt chứ không phải khối đặc
@@ -153,12 +187,17 @@ export function makeCatBox() {
 
 // ---------- ④ Thiết bị làm lạnh ngưng tụ: ống chùm nằm ngang, hai ống nước lạnh; bật thì phủ sương ----------
 export function makeCool() {
-  const g = new T.Group(), mat = std('#b9c8cf', { metalness: 0.7, roughness: 0.3 });
+  const g = new T.Group(), mat = phuVan(std('#b9c8cf', { metalness: 0.7, roughness: 0.3 }));
   [-0.36, 0.36].forEach((x) => add(g, new T.BoxGeometry(0.1, 0.34, 0.44), M.dark, x, 0.17, 0));
-  const body = add(g, cyl(0.25, 1.15, 32), mat, 0, 0.56, 0); body.rotation.z = Math.PI / 2;
-  [-0.6, 0.6].forEach((x) => { const c = add(g, new T.SphereGeometry(0.25, 28, 12), mat, x, 0.56, 0); c.scale.x = 0.45; });
-  [-0.28, 0.28].forEach((x) => add(g, cyl(0.04, 0.42, 12), std('#3f8fd0', { metalness: 0.3 }), x, 0.98, 0));
-  const frost = add(g, cyl(0.262, 1.0, 32), new T.MeshStandardMaterial({ color: '#eaf7ff', roughness: 0.9, transparent: true, opacity: 0, depthWrite: false }), 0, 0.56, 0); frost.rotation.z = Math.PI / 2;
+  let R = 0.25, Y = 0.56;
+  if (coKhoi('heat_exchanger')) { // bộ làm lạnh thật (ảnh LAB-014): ống chùm nằm ngang dài 1,5, nong 1,7 lần
+    const K = khoiTuAnh('heat_exchanger', 1.5, { rScale: 1.7, mat: { metalness: 0.3, roughness: 0.42 } }); R = K.r; Y = 0.34 + R + 0.02; K.mesh.position.y = Y; g.add(K.mesh);
+  } else {
+    const body = add(g, cyl(0.25, 1.15, 32), mat, 0, 0.56, 0); body.rotation.z = Math.PI / 2;
+    [-0.6, 0.6].forEach((x) => { const c = add(g, new T.SphereGeometry(0.25, 28, 12), mat, x, 0.56, 0); c.scale.x = 0.45; });
+  }
+  [-0.28, 0.28].forEach((x) => add(g, cyl(0.04, 0.42, 12), std('#3f8fd0', { metalness: 0.3 }), x, Y + R + 0.18, 0));
+  const frost = add(g, cyl(R * 1.05, 1.0, 32), new T.MeshStandardMaterial({ color: '#eaf7ff', roughness: 0.9, transparent: true, opacity: 0, depthWrite: false }), 0, Y, 0); frost.rotation.z = Math.PI / 2;
   let k = 0, to = 0;
   g.userData = { top: 1.3, setOn(on) { to = on ? 1 : 0; }, update(dt) { dt = safe(dt); k += (to - k) * Math.min(1, dt * 1.5); frost.material.opacity = 0.62 * k; } };
   return g;
@@ -166,14 +205,19 @@ export function makeCool() {
 
 // ---------- ⑤ Bình tách và chứa NH₃ lỏng, có ống thuỷ nhìn mực ----------
 export function makeSep() {
-  const g = new T.Group(); legs(g, 0.28, 0.22);
-  const b = new T.Group(); b.position.y = 0.3; g.add(b); vessel(b, 0.38, 1.0, M.white);
-  add(g, new T.BoxGeometry(0.12, 0.8, 0.03), M.dark, 0, 0.8, 0.385);
-  const liq = add(g, new T.BoxGeometry(0.08, 1, 0.02), new T.MeshStandardMaterial({ color: '#7fd6f2', emissive: '#2aa9d6', emissiveIntensity: 0.5, roughness: 0.2 }), 0, 0.42, 0.4); liq.geometry.translate(0, 0.5, 0); liq.castShadow = false;
-  const lab = plate('NH₃ lỏng', 0.52, 0.2, { bg: '#ffffff', fg: '#0d5c50', size: 0.62 }); lab.position.set(0, 1.42, 0.2); lab.rotation.x = -0.25; g.add(lab);
-  add(g, cyl(0.045, 0.3, 12), M.steel, 0, 1.62, 0);
+  const g = new T.Group(); let win = { x: 0, z: 0.4, y0: 0.42, hh: 0.76, w: 0.08 };
+  if (coKhoi('storage_tank')) { // bồn thật (ảnh LAB-014, có cửa kính): cao 1,95, nong 1,5 lần; chân rời dựng bằng mã đúng độ cao chân trong ảnh
+    const K = khoiTuAnh('storage_tank', 1.95, { rScale: 1.5, mat: { metalness: 0.25, roughness: 0.45 } }); g.add(K.mesh); legs(g, K.r * 0.72, K.y0 + 0.02, 4);
+    // cửa kính trên ảnh (đo 27/11): x 206–298 px, y 232–842 px; mực NH₃ lỏng dâng trong đúng khung đó, sát mặt cong của bồn
+    const x0 = K.toX(206), x1 = K.toX(298), xc = (x0 + x1) / 2; win = { x: xc, z: Math.sqrt(Math.max(0, K.r * K.r - xc * xc)) + 0.012, y0: K.toY(842), hh: K.toY(232) - K.toY(842), w: (x1 - x0) * 0.8 };
+  } else {
+    legs(g, 0.28, 0.22); const b = new T.Group(); b.position.y = 0.3; g.add(b); vessel(b, 0.38, 1.0, M.white);
+    add(g, new T.BoxGeometry(0.12, 0.8, 0.03), M.dark, 0, 0.8, 0.385); add(g, cyl(0.045, 0.3, 12), M.steel, 0, 1.62, 0);
+  }
+  const liq = add(g, new T.BoxGeometry(win.w, 1, 0.02), new T.MeshStandardMaterial({ color: '#7fd6f2', emissive: '#2aa9d6', emissiveIntensity: 0.5, roughness: 0.2 }), win.x, win.y0, win.z); liq.geometry.translate(0, 0.5, 0); liq.castShadow = false; liq.rotation.y = Math.atan2(win.x, win.z); // áp theo mặt cong của bồn ở chỗ cửa kính
+  const lab = plate('NH₃ lỏng', 0.52, 0.2, { bg: '#ffffff', fg: '#0d5c50', size: 0.62 }); lab.position.set(0, 2.05, 0.2); lab.rotation.x = -0.25; g.add(lab);
   let k = 0, to = 0;
-  g.userData = { top: 1.9, setLevel(v) { to = Math.max(0, Math.min(1, v)); }, update(dt) { dt = safe(dt); k += (to - k) * Math.min(1, dt * 1.2); liq.scale.y = Math.max(0.001, 0.76 * k); liq.visible = k > 0.01; } };
+  g.userData = { top: 1.9, setLevel(v) { to = Math.max(0, Math.min(1, v)); }, update(dt) { dt = safe(dt); k += (to - k) * Math.min(1, dt * 1.2); liq.scale.y = Math.max(0.001, win.hh * k); liq.visible = k > 0.01; } };
   return g;
 }
 

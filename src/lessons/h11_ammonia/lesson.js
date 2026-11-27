@@ -62,6 +62,7 @@ const CSS = `
 export function createLesson(shell) {
   const lab = MODE2D ? createLab2d(shell.els.stage, declaration2d(DECL)) : createLab(shell.els.stage, declaration(DECL)), stage = lab.stage;
   shell.els.stage.closest('.lk').classList.add('is-v3');
+  if (!MODE2D && stage.renderer) stage.renderer.toneMappingExposure = 1.1; // sa bàn: hạ độ sáng (mặc định 1,3) để mặt thép còn tương phản, không lì như nhựa (27/11)
   if (!document.getElementById('sb-css')) document.head.append(h('style', { id: 'sb-css', text: CSS + CHART_CSS }));
   const D = shell.state.data; // phần được lưu
   D.done = D.done || {}; D.reveal = D.reveal || {}; D.rows = D.rows || []; D.entered = D.entered || {};
