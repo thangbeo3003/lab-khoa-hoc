@@ -9,7 +9,7 @@ const V3 = /[?&]v=3(?!\d)/.test(location.search);
 // ?bai=<mã bài>: mở bài theo mã của danh mục (src/catalog/hoa.js). Không có ?bai= thì mọi thứ như cũ.
 const BAI = { 'CHEM10-05': './lessons/h10_nhom_halogen/lesson.js', 'CHEM11-04': './lessons/h11_ammonia/lesson.js' }[new URLSearchParams(location.search).get('bai')] || null;
 // &mode=thuc-te (26/11): mở nhiệm vụ Thực tế của bài (khuôn flat/thuc_te.js) thay cho bài học, cùng khung trang; bài chưa có nhiệm vụ thì như cũ.
-const THUC_TE = new URLSearchParams(location.search).get('mode') === 'thuc-te' ? { 'CHEM10-05': './lessons/h10_nhom_halogen/thuc_te.js' }[new URLSearchParams(location.search).get('bai')] || null : null;
+const THUC_TE = new URLSearchParams(location.search).get('mode') === 'thuc-te' ? { 'CHEM10-05': './lessons/h10_nhom_halogen/thuc_te.js', 'CHEM11-04': './lessons/h11_ammonia/thuc_te.js' }[new URLSearchParams(location.search).get('bai')] || null : null;
 // Kiểu chữ IBM Plex (chủ chốt 21/11) cho bản 3 và các bài mở bằng ?bai=; bản 1 đóng băng, bản 2 giữ nguyên.
 if (V3 || BAI) { const fs = document.createElement('script'); fs.src = './src/free/ds_font.js'; document.head.appendChild(fs); }
 try {

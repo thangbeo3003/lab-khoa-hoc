@@ -85,6 +85,6 @@ export const LESSONS = [
 
 export const READY = {
   'CHEM10-04': { href: './index.html?v=3', modes: ['3d'], title: 'Tốc độ phản ứng: nhanh hay chậm do đâu?' },
-  'CHEM11-04': { href: './index.html?bai=CHEM11-04', modes: ['2d', '3d'], title: 'Tổng hợp ammonia: vì sao nhà máy không chạy lạnh cho được nhiều?', label: 'Thử nghiệm' }, // bài thử đầu tiên của sân khấu SA BÀN (27/11); mới có 3D, chưa có giáo viên duyệt
+  'CHEM11-04': { href: './index.html?bai=CHEM11-04', modes: ['2d', '3d', 'thuc-te'], title: 'Tổng hợp ammonia: vì sao nhà máy không chạy lạnh cho được nhiều?', label: 'Thử nghiệm' }, // bài thử đầu tiên của sân khấu SA BÀN (27/11); mới có 3D, chưa có giáo viên duyệt
   'CHEM10-05': { href: './index.html?bai=CHEM10-05', modes: ['2d', '3d', 'thuc-te'], title: 'Nhóm halogen: ai đẩy được ai?', label: 'Thử nghiệm' }, // 2D đang dựng, Thực tế chưa có; 'Thử nghiệm' tới khi đủ nguồn (facts.md D8 đến D11)
 };
