@@ -194,8 +194,8 @@ function shelfLabel() {
   const c = document.createElement('canvas'); c.width = 2048; c.height = 112;
   const x = c.getContext('2d'); x.fillStyle = palette.graphite; x.fillRect(0, 0, c.width, c.height);
   x.fillStyle = '#e8f1f0'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '600 58px "IBM Plex Sans", "Segoe UI", Arial, sans-serif';
-  x.fillText('DUNG DỊCH MẪU', c.width * .25, 60); x.fillText('THUỐC THỬ', c.width * .75, 60);
-  x.fillStyle = '#e8f1f055'; x.fillRect(c.width / 2 - 2, 18, 4, 76);
+  // Chữ đứng ở hai đầu giá, ngoài bề ngang dãy ống nghiệm (ống ở x −1,94 … −0,06 của bàn): nhìn toàn bàn không bị ống che
+  x.textAlign = 'left'; x.fillText('DUNG DỊCH MẪU', 40, 60); x.textAlign = 'right'; x.fillText('THUỐC THỬ', c.width - 40, 60);
   const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; t.anisotropy = 8;
   return new T.MeshBasicMaterial({ map: t, toneMapped: false });
 }

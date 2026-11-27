@@ -227,7 +227,7 @@ for (const order of [['Mg', 'H2O'], ['H2O', 'Mg']]) {
   // H7) Nước iodine gặp nước chlorine dư: KI đi kèm bị oxi hoá hết, I₂ tách ra; thêm KI thì kết tủa iodine tan lại.
   { const t = newTube(); add(t, 'I2', { mL: 2 }); ok(contents(t).length === 1 && contents(t)[0].id === 'I2', 'H7 bảng trong ống chỉ hiện nước iodine, KI đi kèm không hiện riêng');
     add(t, 'Cl2', { mL: 4 }); ok(t.items.KI.mol < 1e-12 && near(I2s(t), 0.00002 + 0.0001), `H7 chlorine dư: I₂ rắn ${mm(I2s(t))} mmol`);
-    const ev = add(t, 'KI', { mL: 3 }).events; ok(eqs(ev).join() === 'Cl₂ + 2KI → 2KCl + I₂' && t.items.Cl2.mol < 1e-12 && I2s(t) === 0 && near(I2d(t), 0.00022) && fx(ev, 'dissolve').some((x) => /iodine/.test(x.what)), `H7 thêm KI: chlorine dư oxi hoá tiếp, KI còn lại hoà tan kết tủa iodine (I₂ tan ${mm(I2d(t))} mmol)`); }
+    const ev = add(t, 'KI', { mL: 3 }).events; ok(eqs(ev).join() === 'Cl₂ + 2KI → 2KCl + I₂' && t.items.Cl2.mol < 1e-12 && I2s(t) === 0 && near(I2d(t), 0.00022) && fx(ev, 'dissolve').some((x) => /iodine|I₂/.test(x.what)), `H7 thêm KI: chlorine dư oxi hoá tiếp, KI còn lại hoà tan kết tủa iodine (I₂ tan ${mm(I2d(t))} mmol)`); }
   // H8) Phản ứng cũ không đổi.
   { const t = newTube(); add(t, 'CuSO4', { mL: 2 }); ok(eqs(add(t, 'NaOH', { mL: 1 }).events).join() === '2NaOH + CuSO₄ → Cu(OH)₂↓ + Na₂SO₄', 'H8 CuSO₄ + NaOH như cũ');
     const n = newTube(); add(n, 'Na', { piece: true }); const en = add(n, 'HCl', { mL: 2 }).events; ok(eqs(en)[0] === '2Na + 2HCl → 2NaCl + H₂↑' && rxs(en)[0].r.safety === ALKALI_SAFETY.acid, 'H8 Na + HCl như cũ, cảnh báo kim loại kiềm giữ nguyên');

@@ -33,7 +33,7 @@ export const HALOGEN_SERIES = ['Cl', 'Br', 'I'];
 export const IODINE_SOLID = { color: 'xám đen', form: 'tinh thể' };
 // Câu cảnh báo an toàn theo loại nguy hiểm của chất (trường hazard). Không ghi con số. Lời theo mục 3 (An toàn) của facts.md.
 export const SAFETY = {
-  halogen: 'An toàn: chlorine và bromine rất độc, gây bỏng. Ngoài đời chỉ làm trong tủ hút; ở đây chỉ mô phỏng hiện tượng.',
+  halogen: 'An toàn: Cl₂ và Br₂ rất độc, gây bỏng. Ngoài đời chỉ làm trong tủ hút; ở đây chỉ mô phỏng hiện tượng.',
 };
 export const CHEMS = [
   C('HCl', 'HCl', 'Hydrochloric acid', 'acid', { conc: 1.0, ions: ['H', 1, 'Cl', 1], strong: true, ph: 0, color: 'không màu' }),

@@ -145,6 +145,7 @@ export function createLesson(shell) {
   // Ô "BÊN TRONG ỐNG" ở bảng trái (define mục 18, đợt A: bước 3 và 4). Soi ống đang nhỏ; không thì ống học sinh chọn ở vùng hai ống, ống vừa nhỏ, hoặc ống thí nghiệm của bước.
   const P3_STEP = { 2: 'Cl2', 3: 'Cl2', 4: 'Br2', 5: 'I2' }; // bước có ô và thuốc thử của bước (đợt A: bước 3, 4; đợt B thêm bước 5, 6)
   const pbox = createParticleBox({ live: () => S.step in P3_STEP, reagentName: (c) => REAGENT[c] || c, onBig: () => setP3Big(!S.p3Big) });
+  addEventListener('resize', () => requestAnimationFrame(() => { if (S.step in P3_STEP && !S.p3Big) pbox.fit(shell.els.card); }));
   // Phóng to: ô rời bảng trái xuống ngăn dưới bàn (cùng chỗ ngăn lịch sử, ngăn so màu); bảng trái để lại một nút Thu lại.
   function setP3Big(on) {
     S.p3Big = !!on && S.step in P3_STEP; pbox.setBig(S.p3Big);
@@ -420,7 +421,7 @@ export function createLesson(shell) {
       done && i < steps.length - 1 && h('button', { class: 'lk-btn', type: 'button', onclick: () => shell.go(i + 1) }, `Sang bước ${i + 2} ›`)));
     if (i in P3_STEP) { if (S.p3Step !== i) { S.p3Step = i; S.p3Tube = S.p3Live = null; }
       if (S.p3Big) put(host, h('button', { class: 'hg-p3-stub', type: 'button', onclick: () => setP3Big(false) }, 'Ô "Bên trong ống" đang mở lớn dưới bàn · Thu lại')); else put(host, pbox.el);
-      pbox.reset(); syncP3(); }
+      pbox.reset(); syncP3(); requestAnimationFrame(() => pbox.fit(host)); }
     else if (S.p3Big || pbox.el.isConnected) { S.p3Big = false; pbox.setBig(false); pbox.el.remove(); }
     if (done && i === steps.length - 1) {
       const mission = new URL(location.href);

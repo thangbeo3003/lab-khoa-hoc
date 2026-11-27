@@ -266,12 +266,12 @@ function halogenRule(X, Y) {
   if (!isElectrolyte(Y) || halRank(an) < 0) return na(X, Y);
   if (HAL_BUSY.includes(cat)) return na(X, Y, `Halogen còn phản ứng với ion ${prettyIon(CATIONS[cat].f, CATIONS[cat].q)}. App chưa mô phỏng.`);
   const ion = (e) => prettyIon(ANIONS[e].f, -1);
-  if (an === h) return note(none(X, Y, `${pretty(X.f)} và ion ${ion(an)} là cùng một halogen nên không đẩy nhau.`, 'Không đổi, chỉ pha loãng.'), ...(h === 'I' ? ['Iodine tan trong dung dịch có ion iodide (tạo ion I₃⁻ màu đỏ nâu).'] : []));
+  if (an === h) return note(none(X, Y, `${pretty(X.f)} và ion ${ion(an)} là cùng một halogen nên không đẩy nhau.`, 'Không đổi, chỉ pha loãng.'), ...(h === 'I' ? ['I₂ tan trong dung dịch có ion I⁻ (tạo ion I₃⁻ màu đỏ nâu).'] : []));
   if (halRank(h) > halRank(an)) return none(X, Y, `Tính oxi hoá giảm dần Cl₂ > Br₂ > I₂. ${pretty(X.f)} yếu hơn ${pretty(an + '2')} nên không lấy được electron của ion ${ion(an)}.`, 'Không đổi, chỉ pha loãng.');
   const y2 = an + '2', look = HAL_LOOK[an], fx = [E.color(Y.color || 'không màu', look.color, look.hex)];
-  const r = rx(X, Y, [X.f, Y.f], [compound(cat, h), y2], {}, fx, `Tính oxi hoá giảm dần Cl₂ > Br₂ > I₂. ${HAL_NAME[h][0].toUpperCase() + HAL_NAME[h].slice(1)} mạnh hơn ${HAL_NAME[an]} nên lấy electron của ion ${ion(an)}, đẩy ${HAL_NAME[an]} ra khỏi muối.`,
+  const r = rx(X, Y, [X.f, Y.f], [compound(cat, h), y2], {}, fx, `Tính oxi hoá giảm dần Cl₂ > Br₂ > I₂. ${pretty(h + '2')} mạnh hơn ${pretty(an + '2')} nên lấy electron của ion ${ion(an)}, đẩy ${pretty(an + '2')} ra khỏi muối.`,
     { ionic: equation([{ f: X.f }, { f: an, q: -1 }], [{ f: h, q: -1 }, { f: y2 }])?.text });
-  if (an === 'I') note(r, `Iodine sinh ra tan trong ion iodide còn lại nên dung dịch màu đỏ nâu. Nếu ${HAL_NAME[h]} dư so với iodide, iodine tách ra thành kết tủa xám đen.`);
+  if (an === 'I') note(r, `I₂ sinh ra tan trong dung dịch còn ion I⁻ nên màu đỏ nâu. Nếu ${pretty(h + '2')} dư so với I⁻, I₂ tách ra thành kết tủa xám đen.`);
   return r;
 }
 

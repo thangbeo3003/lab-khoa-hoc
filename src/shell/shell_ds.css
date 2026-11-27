@@ -444,6 +444,9 @@ html[data-ui="ds"] { --card:#fff; --good:#14624f; --good-soft:#e6f4ea; --bad:#b4
 .is-full .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock) .lk-pn { width:20px; height:20px; margin-top:0; font-size:11px; }
 .ds .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock) .lk-pb .lk-btn { min-height:0; padding:2px 0; border:0; background:none; box-shadow:none; color:var(--muted, #666878); font-size:12.5px; }
 .is-full .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock) .lk-pb > :not(.lk-btn):not(.lk-pl) { display:none; }
+/* Nghiệm thu 27/11: việc chọn làm lại được (tốc độ nhỏ HCl ở bước 2) đã làm xong vẫn phải bấm được lựa chọn khác, nên giữ hàng nút chọn khi nút còn bấm được */
+.is-full .hg-compact .lk-pstep.is-done:not(.is-next) .lk-pb > .lk-seg:has(button:not([disabled])) { display:flex; margin-top:3px; }
+.is-full .hg-compact .lk-pstep.is-done:not(.is-next) .lk-seg button { min-height:0; padding:2px 10px; font-size:12px; line-height:16px; }
 .is-full .hg-compact .lk-pstep:not(.is-next):is(.is-done, .is-lock) .lk-pl { font-weight:500; color:var(--muted, #666878); }
 .is-full .hg-compact .lk-proc { gap:2px; }
 /* Nhật ký: lúc làm chỉ hiện lần ghi gần nhất, bấm mới mở lịch sử và bảng tổng kết */
@@ -576,3 +579,11 @@ dialog.hg-compare.hg-dock { position:absolute; inset:auto 12px 10px 12px; width:
 .lk-stage > .hg-p3.is-big .hg-p3-cap { min-height:0; font-size:14px; line-height:20px; }
 .lk-stage > .hg-p3.is-big .hg-p3-steps { left:10px; right:auto; }
 .lk-stage > .hg-p3.is-big .hg-p3-steps button { flex:none; padding:3px 12px; font-size:13px; line-height:18px; }
+
+/* Ô "Bên trong ống" thu thành một dòng khi bảng trái không đủ chỗ (kết luận dài): chỉ còn tên ống và nút Phóng to */
+.hg-p3.is-folded { padding-bottom:6px; }
+.hg-p3.is-folded .hg-p3-stage, .hg-p3.is-folded .hg-p3-cap, .hg-p3.is-folded .hg-p3-again:not(.hg-p3-big) { display:none; }
+.hg-p3.is-folded header { margin-bottom:0; }
+.hg-p3.is-tight .hg-p3-note { display:none; }
+.hg-p3.is-tight .hg-p3-cap { position:absolute; z-index:2; left:6px; right:6px; bottom:6px; margin:0; min-height:0; padding:4px 8px; border-radius:8px; background:#0b1322e0; color:#e8f1f0; font-size:11.5px; line-height:16px; pointer-events:none; }
+.hg-p3.is-tight .hg-p3-phen { display:none; }

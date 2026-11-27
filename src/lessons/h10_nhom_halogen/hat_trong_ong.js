@@ -10,6 +10,8 @@ const PHASE = ['Trước khi nhỏ', 'Gặp nhau', 'Sau phản ứng'], SHORT = 
 const NUM = ['', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu'], Cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const list = (a) => (a.length > 1 ? a.slice(0, -1).join(', ') + ' và ' + a[a.length - 1] : a[0] || '');
 const count = (x) => `${NUM[x.n] || x.n} ${x.label}`;
+const PHEN = '\u0001'; // tách câu về hạt với lời hiện tượng; ô chật thì chỉ hiện câu về hạt
+const named = (reagent, f) => (reagent.includes(f) ? Cap(reagent) : `${Cap(reagent)} (${f})`); // "Nước Cl₂", không viết "Nước Cl₂ (Cl₂)"
 
 // Thử nhỏ MỘT giọt vào bản sao của ống: có phản ứng thì trả mô hình hạt của phản ứng đó, không thì null. Ống thật không bị đụng tới.
 function preview(tube, chem) {
@@ -31,10 +33,10 @@ function bounce(salt, chem, reagent, res) {
   const species = {}, sp = (p, kind) => { species[p.label] = { label: p.label, plain: p.plain, kind, color: p.color }; return p.label; };
   const terms = ins.map((p) => ({ f: p.plain, label: sp(p, p.kind), coef: 1, source: 'in', kind: p.kind, parts: [{ label: p.label, n: 4 }] }));
   terms.push({ f: X.plain, label: sp(X, 'mol'), coef: 1, source: 'add', kind: 'mol', parts: [{ label: X.label, n: 3 }] });
-  const anion = ins.find((p) => /⁻$/.test(p.label)), names = list(ins.map((p) => p.label)), tail = res && res.phenomenon && res.phenomenon !== 'Không đổi.' ? ' ' + res.phenomenon : '';
+  const anion = ins.find((p) => /⁻$/.test(p.label)), names = list(ins.map((p) => p.label)), tail = res && res.phenomenon && res.phenomenon !== 'Không đổi.' ? PHEN + res.phenomenon : '';
   const caps = anion
-    ? [`Trong ống có ${names}. ${Cap(reagent)} (${X.label}) từ trên nhỏ xuống.`, `${X.label} chạm ${anion.label} rồi tách ra: ${X.label} không lấy được electron của ${anion.label}.`, `Không có hạt mới: ${names} vẫn như cũ. Màu trong ống là màu của chính ${X.label}.${tail}`]
-    : [`Trong ống chỉ có nước cất. ${Cap(reagent)} (${X.label}) từ trên nhỏ xuống.`, `${X.label} tan vào nước, không gặp ion nào để phản ứng.`, `Trong ống chỉ có ${X.label}: đây là màu của chính ${reagent}, dùng để so với các ống khác.`];
+    ? [`Trong ống có ${names}. ${named(reagent, X.label)} từ trên nhỏ xuống.`, `${X.label} chạm ${anion.label} rồi tách ra: ${X.label} không lấy được electron của ${anion.label}.`, `Không có hạt mới: ${names} vẫn như cũ. Màu trong ống là màu của chính ${X.label}.${tail}`]
+    : [`Trong ống chỉ có nước cất. ${named(reagent, X.label)} từ trên nhỏ xuống.`, `${X.label} tan vào nước, không gặp ion nào để phản ứng.`, `Trong ống chỉ có ${X.label}: đây là màu của chính ${reagent}, dùng để so với các ống khác.`];
   return { m: { species, terms, prods: [], lhs: anion ? [{ label: X.label, n: 1 }, { label: anion.label, n: 1 }] : [], rhs: [], spect: [], nr: 1, perEq: anion ? 3 : 0, excess: terms.map(() => 0), ionic: '', usesIons: true, bounce: true, play: true }, caps };
 }
 // Lời chú thích ba nhịp của một phản ứng, viết từ chính mô hình (không viết cứng theo cặp chất).
@@ -42,8 +44,8 @@ function captions(m, reagent, res) {
   const inside = [...new Set(m.terms.filter((t) => t.source !== 'add').flatMap((t) => t.parts.map((p) => p.label)))];
   const mol = m.lhs.find((x) => m.species[x.label].kind === 'mol'), ion = m.lhs.find((x) => m.species[x.label].kind === 'ion');
   const meet = mol && ion ? `${Cap(count(mol))} gặp ${count(ion)} và lấy electron của ${ion.n > 1 ? 'chúng' : 'nó'}.` : `Các hạt gặp nhau theo tỉ lệ: ${m.ionic}.`;
-  const out = `Tạo ra ${list(m.rhs.map(count))}.` + (m.spect.length ? ` ${list(m.spect.map((x) => x.label))} không đổi.` : '') + (res && res.phenomenon ? ' ' + res.phenomenon : '');
-  return [`Trong ống có ${list(inside)}. ${Cap(reagent)}${mol ? ` (${mol.label})` : ''} từ trên nhỏ xuống.`, meet, out];
+  const out = `Tạo ra ${list(m.rhs.map(count))}.` + (m.spect.length ? ` ${list(m.spect.map((x) => x.label))} không đổi.` : '') + (res && res.phenomenon ? PHEN + res.phenomenon : '');
+  return [`Trong ống có ${list(inside)}. ${mol ? named(reagent, mol.label) : Cap(reagent)} từ trên nhỏ xuống.`, meet, out];
 }
 
 // live(): ô có đang được dùng không (bước có ô và ô đang nằm trong trang); không dùng thì bộ máy hạt không vẽ gì, không tốn máy.
@@ -59,7 +61,7 @@ export function createParticleBox({ live, reagentName, onBig }) {
   const el = h('section', { class: 'hg-p3', 'aria-label': 'Bên trong ống: sơ đồ hạt' },
     h('header', {}, title, h('span', { class: 'hg-p3-btns' }, again, bigBtn)), stage, cap);
   stage.append(stepRow);
-  const engine = () => p3 || (p3 = mountProcess3D(stage, { live: () => el.isConnected && live(), onPhase: (k, text) => { steps.forEach((b, i) => b.classList.toggle('is-on', i === k - 1)); cap.textContent = text || ''; } }));
+  const engine = () => p3 || (p3 = mountProcess3D(stage, { live: () => el.isConnected && live(), onPhase: (k, text) => { steps.forEach((b, i) => b.classList.toggle('is-on', i === k - 1)); const [a, b] = (text || '').split(PHEN); cap.replaceChildren(a, b ? h('span', { class: 'hg-p3-phen', text: ' ' + b }) : ''); } }));
   const put = (m, caps, key) => { model = m; m.key = key; if (m.rhs.length) m.play = true; engine().set(m, caps); el.classList.toggle('is-still', !m.play); stage.dataset.empty = ''; };
   function blank(text) { model = null; if (p3) p3.set(null); stage.dataset.empty = '1'; empty.textContent = text; cap.textContent = ''; el.classList.add('is-still'); }
 
@@ -91,5 +93,16 @@ export function createParticleBox({ live, reagentName, onBig }) {
     const text = chem === 'H2O' ? `Chỉ thêm nước cất: ${list(m.labels)} vẫn như cũ, không có hạt mới.` : `Trong ống có ${list(m.labels)}. Không có hạt mới sinh ra.`;
     put(m, [text, text, text], `still|${id}|${tube.vol.toFixed(3)}|${m.labels.join()}`); p3.pause(false);
   }
-  return { el, show, reset() { sig = ''; }, setBig(on) { el.classList.toggle('is-big', !!on); bigBtn.textContent = on ? 'Thu lại' : 'Phóng to'; bigBtn.title = on ? 'Đưa ô về bảng bên trái' : 'Mở ô này lớn hơn ở ngăn dưới bàn'; } };
+  // Bảng trái không đủ chỗ (kết luận dài, ví dụ bước 4 đã làm xong) thì khung hạt thấp xuống, không thấp hơn 110 px, để bảng không phải cuộn (nghiệm thu 27/11)
+  function fit(host) {
+    stage.style.height = ''; el.classList.remove('is-folded', 'is-tight'); if (cap.parentElement !== el) el.append(cap);
+    if (!host || !el.isConnected || el.classList.contains('is-big')) return;
+    const h0 = stage.getBoundingClientRect().height, over = () => host.scrollHeight - host.clientHeight;
+    let o = over(); if (o <= 0) return;
+    if (h0 - o - 2 >= 110) { stage.style.height = (h0 - o - 2) + 'px'; return; }       // nấc 1: khung hạt thấp xuống
+    el.classList.add('is-tight'); stage.append(cap); o = over();                      // nấc 2: chú thích chui vào đáy khung hạt
+    if (o <= 0) return; if (h0 - o - 2 >= 100) { stage.style.height = (h0 - o - 2) + 'px'; return; }
+    el.classList.remove('is-tight'); el.append(cap); el.classList.add('is-folded');   // nấc 3 (define 18.3): ô thu thành một dòng, bấm Phóng to để xem lớn
+  }
+  return { el, show, fit, reset() { sig = ''; }, setBig(on) { el.classList.toggle('is-big', !!on); bigBtn.textContent = on ? 'Thu lại' : 'Phóng to'; bigBtn.title = on ? 'Đưa ô về bảng bên trái' : 'Mở ô này lớn hơn ở ngăn dưới bàn'; } };
 }

@@ -69,14 +69,14 @@ function iodinePhase(t, events) {
   const iodide = t.order.some((y) => BY_ID[y].ions && BY_ID[y].ions[2] === 'I' && t.items[y].mol > EPS);
   let m = 0, fx;
   if (!iodide && I && I.mol > EPS) { m = I.mol; take(I, m); if (ice) ice.mol += m; else t.ppt.push({ f: 'I2', mol: m, color: IODINE_SOLID.color, form: IODINE_SOLID.form });
-    fx = { type: 'ppt', f: 'I2', color: IODINE_SOLID.color, form: IODINE_SOLID.form, text: `Iodine tách ra thành kết tủa ${IODINE_SOLID.color} (I₂) vì không còn ion iodide để hoà tan` }; }
+    fx = { type: 'ppt', f: 'I2', color: IODINE_SOLID.color, form: IODINE_SOLID.form, text: `I₂ tách ra thành kết tủa ${IODINE_SOLID.color} vì không còn ion I⁻ để hoà tan` }; }
   else if (iodide && ice && ice.mol > EPS) { m = -ice.mol; ice.mol = 0; const it = item(t, 'I2'); it.mol -= m; it.byRx = (it.byRx || 0) - m;
-    fx = { type: 'dissolve', what: 'Kết tủa iodine', text: 'Kết tủa iodine tan lại trong dung dịch iodide, dung dịch màu đỏ nâu' }; }
+    fx = { type: 'dissolve', what: 'Kết tủa I₂', text: 'Kết tủa I₂ tan lại trong dung dịch còn I⁻, dung dịch màu đỏ nâu' }; }
   if (!fx) return;
   const made = [{ f: 'I2', mol: m, mark: '↓' }, { f: 'I2', mol: -m, mark: '' }]; // cộng theo công thức: lượng I₂ không đổi, chỉ đổi pha
   // Sự kiện riêng (không gộp vào phản ứng vừa xảy ra), để phần hình gộp theo phương trình không làm mất hiện tượng này. equation: null, phase: true.
   events.push({ kind: 'reaction', phase: true, a: 'I2', b: 'I2', extent: Math.abs(m), made, used: {}, out: null, slow: false,
-    r: { title: 'Iodine', eq: null, equation: null, effects: [fx], phenomenon: fx.text + '.', reason: m > 0 ? 'Không còn ion iodide nên iodine không tan được, tách ra thành chất rắn.' : 'Iodine tan trong dung dịch có ion iodide, tạo ion I₃⁻ màu đỏ nâu.', notes: [] } });
+    r: { title: 'Iodine', eq: null, equation: null, effects: [fx], phenomenon: fx.text + '.', reason: m > 0 ? 'Không còn ion I⁻ nên I₂ không tan được, tách ra thành chất rắn.' : 'I₂ tan trong dung dịch có ion I⁻, tạo ion I₃⁻ màu đỏ nâu.', notes: [] } });
 }
 function indicatorEvent(t, events) {
   const ind = indicatorLook(t);
