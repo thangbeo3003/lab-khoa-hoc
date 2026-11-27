@@ -11,12 +11,15 @@
 // Các món cùng at[0]: món cùng chiều sâu (hoặc khai độ cao, at có 3 số) đứng chồng tại một chỗ (bình trên giấy, ống trên giá, phễu trên bình cầu);
 // món khác chiều sâu đứng cạnh bên phải. at[1] (chiều sâu) chỉ để xếp lớp trước sau. Ống nghiệm đứng trên giá thì vào đúng lỗ giá (tính từ at[0]).
 // Tủ hút (hood) là phông nền: phủ mọi món của bàn trừ đồng hồ khí độc; món nằm trên sàn tủ. Bộ đo khí (gasrig) gắn vào bình cùng chỗ.
+// BỐ CỤC THEO VAI TRÒ (27/11, DEFINE_SAP_XEP_BAN.md mục 7): bàn khai bo_cuc (cùng bảng bàn 3D đọc, kit/bo_cuc_ban.js) thì bỏ thứ tự at[0] cho các món có tên trong bảng:
+// khay lọ mẫu (ngoài cùng trái) → khay lọ thuốc thử → đế ống (giá xám rack_grey nếu kho có) có bảng tên dưới từng ống → các món còn lại theo at[0] (cốc thải, bình tia, chậu…).
 // Muốn chỉnh riêng cho 2D thì khai ở bàn: mode2d = { x: { idMón: cm }, gap: cm } (không bắt buộc).
 // Đơn vị cảnh: cm thật; mặt bàn ở y = 0, y âm là đi lên.
 // LUẬT THAO TÁC 26/11 (LUAT_THAO_TAC.md, cùng nghĩa với khối luật đầu kit/labset.js): vessel.mL(x) theo thể tích thật (ống 15 mL ở mức đầy hình);
 // lọ 'dropper' khai opts.pip có ống hút rời (lọ đứng yên, ống hút thẳng đứng tới trên miệng ống, từng giọt, bộ đếm, trả về đúng lọ), opts.clear = lọ trong;
 // rinse.waste = cốc thải (Làm lại: đổ vào cốc thải → vòi nước chảy, hứng đổ 2 lần → bình tia tráng nước cất → về giá); bàn khai closeup = cận cảnh tự phóng
 // tới cụm đang dùng (cả màn hẹp), xong thì lùi ra.
+import { cachXep, xepBan2d } from '../kit/bo_cuc_ban.js';
 import { FLAT_META as META, FLAT_IMG as IM, drawFlatImg, flatInner, drawFlatLiquid, drawFlatPiece, flatRgba as rgba, FLAT_FONT as FONT, FLAT_SOLID, PPT_HEX, isGlassImg } from './bench2d.js';
 
 // ---------- BẢNG ÁNH XẠ kind của giáo án → ảnh trong assets/flat ----------
@@ -137,7 +140,7 @@ export function createLab2d(host, decl, opts = {}) {
 
   // ---------- Dựng món ----------
   function sizeOf(it) {
-    const K = it.K, o = it.spec.opts || {}, key = K.img === 'bottle' && o.amber ? 'bottle_amber' : it.kind === 'dropper' && o.clear ? 'dropbottle' : K.img, m = key && META[key];
+    const K = it.K, o = it.spec.opts || {}, key = K.img === 'bottle' && o.amber ? 'bottle_amber' : it.kind === 'dropper' && o.clear ? 'dropbottle' : K.img === 'rack' && it.B.d.bo_cuc && META.rack_grey && IM.rack_grey ? 'rack_grey' : K.img, m = key && META[key];
     if (m && IM[key]) {
       const ch = m.bottom - (m.top || 0), cw = 'left' in m ? m.right - m.left : m.w, hcm = it.kind === 'stand' && o.h ? o.h * 12 : it.kind === 'beaker' && o.h ? o.h * 13 : K.h, wcm = it.kind === 'sink' && o.w ? o.w * 13 : K.w, s = hcm ? hcm / ch : (wcm || 10) / cw; // cốc (opts.h) và chậu (opts.w) theo cỡ khai của 3D
       return { img: key, m, s, w: m.w * s, h: ch * s, L: (m.cx - ('left' in m ? m.left : 0)) * s, R: (('right' in m ? m.right : m.w) - m.cx) * s };
@@ -200,6 +203,61 @@ export function createLab2d(host, decl, opts = {}) {
     return v;
   }
 
+  // ---------- Xếp theo vai trò (bàn khai bo_cuc) ----------
+  const KHAY = { day: 0.45, cao: 1.7, le: 1.3, cach: 1.6 }; // cm: đáy lòng khay, cao thành khay, lề hai đầu khay, khe giữa hai khay
+  function placeBoCuc(B, free, GAP) {
+    const L = B.d.bo_cuc; B.khay = []; B.bang = [];
+    if (!L || B.solo) return false;
+    const X = xepBan2d(L[cachXep(L, B.opts.step)]), byId = (id) => free.find((it) => it.id === id), used = new Set();
+    free.forEach((it) => { if (it.elev0 == null) it.elev0 = it.elev; it.elev = it.elev0; it.tray = false; });
+    let cur = 0;
+    X.khay.forEach((ids) => {
+      const its = ids.map(byId).filter(Boolean); if (!its.length) return;
+      const half = Math.max(...its.map((i) => Math.max(i.L, i.R))), pitch = 2 * half + 1.1, x0 = cur;
+      its.forEach((it, k) => { it.home.x = x0 + KHAY.le + half + k * pitch; it.elev = KHAY.day; it.tray = true; used.add(it); });
+      const x1 = x0 + 2 * KHAY.le + 2 * half + (its.length - 1) * pitch; B.khay.push({ x0, x1 }); cur = x1 + KHAY.cach;
+    });
+    const rack = free.find((it) => it.kind === 'rack');
+    if (rack && rack.m && rack.m.holes) {
+      cur += Math.max(0, GAP - KHAY.cach); rack.home.x = cur + rack.L; rack.elev = 0; used.add(rack);
+      const tubes = [...X.ong.map(byId).filter(Boolean), ...free.filter((t) => t.kind === 'tube' && !X.ong.includes(t.id))], nH = rack.m.holes.length;
+      // ống cách một lỗ khi đế còn chỗ: bảng tên dưới từng ống đủ rộng để đọc (2 ống: lỗ 1, 3 · 3 ống: lỗ 0, 2, 4); nhiều ống hơn thì lỗ liền nhau
+      const step = tubes.length * 2 - 1 <= nH ? 2 : 1, s0 = Math.max(0, Math.floor((nH - ((tubes.length - 1) * step + 1)) / 2));
+      tubes.forEach((t, k) => { t.rack = rack; t.hole = Math.min(nH - 1, s0 + k * step); used.add(t); });
+      B.bang = X.bang.filter((p) => byId(p.id));
+      cur = rack.home.x + rack.R + GAP;
+    } else cur += GAP - KHAY.cach;
+    // còn lại theo at[0]; cụm rửa (cốc thải, bình tia, chậu) luôn ở mép phải (luật mục 2.5)
+    const wasteId = B.d.rinse && B.d.rinse.waste, wash = (it) => it.id === wasteId || it.kind === 'wash' || it.kind === 'sink';
+    const rest = free.filter((it) => !used.has(it)).sort((a, b) => wash(a) - wash(b) || a.spec.at[0] - b.spec.at[0] || a.z - b.z);
+    rest.forEach((it) => { it.home.x = cur + it.L; cur = it.home.x + it.R + GAP; });
+    return true;
+  }
+  // Khay nông: ảnh tray_shallow kéo giãn phần giữa, giữ hai đầu bo (ảnh chưa có thì vẽ dải xám tạm, chờ LAB-014)
+  function drawTrays(B) {
+    (B.khay || []).forEach(({ x0, x1 }) => {
+      const w = x1 - x0, h = KHAY.cao, im = IM.tray_shallow, m = META.tray_shallow;
+      if (im && m) { const sw = m.w, sh = m.h, cap = sh * 0.9, k = h / sh, capW = Math.min(cap * k, w / 3);
+        c.drawImage(im, 0, 0, cap, sh, x0, -h, capW, h); c.drawImage(im, cap, 0, sw - 2 * cap, sh, x0 + capW, -h, w - 2 * capW, h); c.drawImage(im, sw - cap, 0, cap, sh, x1 - capW, -h, capW, h); return; }
+      c.save(); c.fillStyle = '#9da8b1'; c.strokeStyle = 'rgba(40,52,64,0.35)'; c.lineWidth = 0.08; c.beginPath(); c.roundRect(x0, -h, w, h, 0.5); c.fill(); c.stroke();
+      c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(x0 + 0.4, -h + 0.12, w - 0.8, 0.16); c.restore();
+    });
+  }
+  // Bảng tên dưới từng ống (mép trước đế), cỡ chữ theo màn hình để đọc được ở mọi khung
+  function drawPlates(B, V, dpr) {
+    if (!(B.bang || []).length) return;
+    const rack = Object.values(B.items).find((it) => it.kind === 'rack' && it.visible); if (!rack) return;
+    const fs = Math.round(11.5 * dpr), ph = Math.round(fs * 1.65), y = V.OY - Math.min(rack.h * 0.08, 1.2) * V.SC - ph / 2;
+    c.save(); c.font = `600 ${fs}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    B.bang.forEach(({ id, chu }) => {
+      const t = B.items[id]; if (!t || !t.visible) return;
+      const x = V.OX + t.home.x * V.SC, w = c.measureText(chu).width + fs * 1.1;
+      c.fillStyle = '#f4efe2'; c.strokeStyle = 'rgba(20,34,58,0.28)'; c.lineWidth = dpr; c.beginPath(); c.roundRect(x - w / 2, y - ph / 2, w, ph, ph * 0.3); c.fill(); c.stroke();
+      c.fillStyle = '#2b2f36'; c.fillText(chu, x, y + dpr * 0.5);
+    });
+    c.restore();
+  }
+
   // ---------- Xếp chỗ: at[0] là thứ tự trái → phải ----------
   function layout(B) {
     const d = B.d, M2 = d.mode2d || {}, GAP = M2.gap ?? 3, GAP_IN = 2;
@@ -211,7 +269,7 @@ export function createLab2d(host, decl, opts = {}) {
     // Ống nghiệm cắm trên giá: vào lỗ gần at[0] nhất (giá của bài mẫu có lỗ cách nhau 0,32 tính từ tâm giá)
     free.filter((it) => it.kind === 'tube').forEach((t) => { const rack = free.find((r) => r.kind === 'rack' && Math.abs(r.spec.at[0] - t.spec.at[0]) < 0.75 && t.spec.at.length === 3); if (rack) { t.rack = rack; t.hole = clamp(Math.round((t.spec.at[0] - rack.spec.at[0]) / 0.32 + 2), 0, 4); } });
     let cur = 0;
-    groups.forEach((g) => {
+    if (!placeBoCuc(B, free, GAP)) groups.forEach((g) => {
       const list = g.list.filter((it) => !it.rack);
       if (!list.length) return;
       const base = list.slice().sort((a, b) => a.z - b.z || a.elev - b.elev)[0];
@@ -284,7 +342,7 @@ export function createLab2d(host, decl, opts = {}) {
     // món chỉ dùng ở bước khác thì cất đi (show(B) theo B.opts.step của bài); món khai of thì theo chế độ một bình
     let moved = false;
     Object.values(B.items).forEach((it) => { const vis = (!it.spec.show || !!it.spec.show(B)) && (!it.spec.of || !B.solo || it.spec.of === B.solo); if (vis !== it.visible) { it.visible = vis; moved = true; } });
-    if (moved) { layout(B); Object.values(B.items).forEach((it) => { it.pos.x = it.home.x; it.pos.y = it.home.y; }); }
+    if (moved || d.bo_cuc) { layout(B); Object.values(B.items).forEach((it) => { it.pos.x = it.home.x; it.pos.y = it.home.y; }); }
   }
 
   // ---------- Việc (cùng luật với 3D) ----------
@@ -1016,6 +1074,7 @@ export function createLab2d(host, decl, opts = {}) {
     order.forEach((it) => { if (it.kind === 'gasrig' && it.host && it.m) drawPost(it); });
     order.forEach((it) => { if (it.kind === 'stand') drawClampOf(it); });
     order.forEach((it) => { if (it.kind !== 'gasrig' && it.kind !== 'rack') drawItem(it); });
+    drawTrays(B); // thành trước của khay che chân lọ như thật
     order.forEach((it) => { if (it.kind === 'rack') drawItem(it); }); // giá ống vẽ sau ống: tấm trước của giá che chân ống như thật
     drawPipes(B);
     B.fly.forEach((p) => p.ps.forEach((q) => { c.save(); c.translate(p.f.x + q.dx * 0.6, p.f.y); drawFlatPiece(c, q.kind, q.col, q.r, q.seed); c.restore(); }));
@@ -1025,6 +1084,7 @@ export function createLab2d(host, decl, opts = {}) {
     order.forEach((it) => { if (it.pip && it.pip.out) drawPipette(it); }); // ống hút đang ngoài lọ: vẽ trên cùng
     drawStream(B); drawStreams(B); drawDrops(B);
     c.setTransform(1, 0, 0, 1, 0, 0);
+    drawPlates(B, V, dpr);
     const cnt = tags ? counterBox(B, V, dpr) : null, obs = tags ? pipBoxes(B, V, dpr) : [];
     if (cnt) obs.push(cnt);
     const boxes = tags ? drawTags(B, V, dpr, obs) : [];

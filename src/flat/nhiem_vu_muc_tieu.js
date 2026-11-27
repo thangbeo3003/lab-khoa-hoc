@@ -99,7 +99,7 @@ export function createTargetMission({ lessonMeta, application: A, sim }) {
         put(host, h('p', { class: 'lk-msg', text: lead }), rest && h('details', { class: 'hg-more tt-more' }, h('summary', { text: 'Đọc thêm bối cảnh' }), h('p', { class: 'lk-msg', text: rest })),
           D.hook && h('div', { class: 'lk-concl' }, h('b', { text: `Câu hỏi mồi: em chọn ${D.hook}, đáp án ${A.hook.answer}` }), h('p', { text: A.hook.why })),
           h('ul', { class: 'lk-ideas' }, A.facts.map((f, n) => h('li', {}, f.text, badge(f.status || 'ok'), ' ',
-            h('button', { class: 'lk-btn tt-src', type: 'button', 'aria-expanded': String(!!D.src[n]), onclick: () => { D.src[n] = !D.src[n]; save(); markDone(2); shell.refresh(); } }, D.src[n] ? 'Ẩn nguồn' : 'Xem nguồn'),
+            h('button', { class: 'lk-btn tt-src', type: 'button', 'aria-expanded': String(!!D.src[n]), onclick: () => { D.src = D.src[n] ? {} : { [n]: true }; save(); markDone(2); shell.refresh(); } }, D.src[n] ? 'Ẩn nguồn' : 'Xem nguồn'),
             D.src[n] && h('p', { class: 'lk-msg', style: 'font-size:12.5px' }, 'Nguồn: ', f.sourceUrl ? h('a', { href: f.sourceUrl, target: '_blank', rel: 'noopener noreferrer', text: f.source }) : f.source)))));
       }
       if (i === 3) put(host, h('div', { class: 'lk-concl' }, h('b', { text: 'Vị trí trong sách' }), h('p', { text: A.textbookLink.ref })), h('p', { class: 'lk-msg', style: 'color:var(--muted)', text: 'Chỉ ghi vị trí: ' + A.textbookLink.kind + '.' }));

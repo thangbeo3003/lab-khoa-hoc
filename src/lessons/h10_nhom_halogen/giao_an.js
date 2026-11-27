@@ -161,6 +161,23 @@ const ctrlStep = (id, label, tube, v, after, extra = {}, src = 'dW', chem = 'H2O
 // Ống so màu (bàn 3): nước bromine, nước iodine tự có màu, nên ống chỉ có nước cất nhận CÙNG số giọt halogen để so (T11). Màu do kho hoá học tính như mọi ống.
 const refStep = (id, label, src, chem, v, after) => ctrlStep(id, label, 'tW', v, after, { off: true }, src, chem);
 const dripFixed = (id, label, src, tube, chem, n, extra = {}) => ({ id, label, verb: 'drip', item: src, into: [tube], n, drop: hexOf(chem), during: during(tube, chem, () => n), apply: (B) => drip(B, tube, chem, n, false), ...extra });
+// BỐ CỤC BÀN theo vai trò (DEFINE_SAP_XEP_BAN.md mục 7, chủ duyệt 27/11): S lọ mẫu · R lọ thuốc thử · T ống trên đế kèm chữ ở bảng tên.
+// Khoá = chỉ số bước (0 = bước 1); macdinh = bước không khai. Bàn 2D và bàn 3D đọc CÙNG bảng này (kit/bo_cuc_ban.js).
+// Bước 5, 6: một ống so màu với đúng hai ống thử thì ống so màu đứng GIỮA (luật 7.7).
+const BO_CUC = {
+  cl: {
+    2: { S: ['bBr', 'dW'], R: ['dCl'], T: [['tRef', 'Đối chứng'], ['tBr', 'Thí nghiệm']] },
+    3: { S: ['bI', 'dW'], R: ['dCl', 'dS'], T: [['tRef', 'Đối chứng'], ['tI', 'Thí nghiệm']] },
+    8: { S: [], R: ['dCl', 'dS', 'dBr'], T: [['tRef', 'Ống A'], ['tBr', 'Ống B'], ['tI', 'Ống C']] },
+    macdinh: { S: ['bBr', 'dW'], R: ['dCl', 'dS'], T: [['tRef', 'Đối chứng'], ['tBr', 'Thí nghiệm'], ['tI', 'Thí nghiệm']] },
+  },
+  bri: {
+    4: { S: ['bKI', 'bNaCl', 'dW'], R: ['dBr'], T: [['t1', 'Ống 1'], ['tW', 'So màu'], ['t2', 'Ống 2']] },
+    5: { S: ['bNaBr', 'bNaCl', 'dW'], R: ['dI'], T: [['t3', 'Ống 3'], ['tW', 'So màu'], ['t4', 'Ống 4']] },
+    macdinh: { S: ['dW'], R: ['dBr', 'dI'], T: [['t1', 'Ống 1'], ['t2', 'Ống 2'], ['tW', 'So màu'], ['t3', 'Ống 3'], ['t4', 'Ống 4']] },
+  },
+};
+
 const PIP = (title, name, clear = false) => ({ pip: true, clear, title, name });
 const SINK = { id: 'sink', kind: 'sink', at: [3.1, 0.6], opts: { photo: true, w: 2.1 }, tag: 'Vòi nước: rửa ống', role: 'rửa ống dưới vòi sau khi đã đổ dung dịch vào cốc thải (làm lại)' };
 // Hai bình cùng là nước cất nhưng khác việc (chủ 27/11: "h20 cũng là nước cất à- cần rõ ràng ra"): lọ có ống hút để NHỎ vào ống đối chứng hoặc ống so màu, bình tia để TRÁNG ống sau khi rửa. Nhãn và thẻ tên ghi rõ việc của từng bình.
@@ -276,7 +293,7 @@ export const lab = {
 
     // ---------- Bàn 2 · Chlorine gặp muối halide (cũng là bàn Sát hạch) ----------
     // 1 Chuẩn bị: rót muối vào hai ống · 2 Chọn: số giọt · 3 Khởi động: chạm lọ nước chlorine · 4 Quan sát: màu, kết tủa, phương trình, hồ tinh bột · 5 Ghi · 6 Làm lại: vòi nước
-    { id: 'cl', name: 'Bàn 2 · Nước Cl₂ gặp muối halide', short: 'Nước Cl₂', color: '#0e7490', at: [9.0, -5.9], tagY: 3.9, ref: { nCl: 20 }, closeup: true, closeupHold: 2.8 /* giữ cận cảnh sau giọt cuối: kịp nhìn màu vừa đổi (chặng 1, 26/11) */, tagFocus: true,
+    { id: 'cl', bo_cuc: BO_CUC.cl, name: 'Bàn 2 · Nước Cl₂ gặp muối halide', short: 'Nước Cl₂', color: '#0e7490', at: [9.0, -5.9], tagY: 3.9, ref: { nCl: 20 }, closeup: true, closeupHold: 2.8 /* giữ cận cảnh sau giọt cuối: kịp nhìn màu vừa đổi (chặng 1, 26/11) */, tagFocus: true,
       eq: 'nước Cl₂ + muối NaBr, KI → ?', cond: 'mỗi ống 2 mL dung dịch muối · số giọt tự chọn',
       text: 'Giá ống nghiệm gỗ: ống đối chứng và ống thí nghiệm, ban đầu rỗng. Lọ muối có ống hút: lấy 2 mL vào mỗi ống. Nhỏ nước Cl₂ vào ống thí nghiệm, nhỏ cùng số giọt nước cất vào ống đối chứng. Hồ tinh bột để nhận ra I₂. Cốc thải, vòi nước, bình tia để làm lại.',
       view: { target: [-0.4, 1.15, 0.4], w: 7.8, h: 3.0, el: 15, az: 4 },
@@ -323,7 +340,7 @@ export const lab = {
 
     // ---------- Bàn 3 · Bromine và iodine thử sức ----------
     // 1 Chuẩn bị: rót muối · 2 Chọn: số giọt (lọ halogen của bước) · 3 Khởi động: chạm lọ · 4 Quan sát · 5 Ghi · 6 Làm lại · bước 6 xếp ba lọ lên kệ
-    { id: 'bri', name: 'Bàn 3 · Nước Br₂ và nước I₂', short: 'Nước Br₂, I₂', color: '#9a3412', at: [0, 6.6], tagY: 3.9, ref: { nBr: 20, nI: 20 }, closeup: true, closeupHold: 2.8 /* giữ cận cảnh sau giọt cuối: kịp nhìn màu vừa đổi (chặng 1, 26/11) */, tagFocus: true,
+    { id: 'bri', bo_cuc: BO_CUC.bri, name: 'Bàn 3 · Nước Br₂ và nước I₂', short: 'Nước Br₂, I₂', color: '#9a3412', at: [0, 6.6], tagY: 3.9, ref: { nBr: 20, nI: 20 }, closeup: true, closeupHold: 2.8 /* giữ cận cảnh sau giọt cuối: kịp nhìn màu vừa đổi (chặng 1, 26/11) */, tagFocus: true,
       eq: 'nước Br₂, nước I₂ + muối KI, NaCl, NaBr → ?', cond: 'mỗi ống 2 mL dung dịch muối · số giọt tự chọn',
       text: 'Ống nghiệm ban đầu rỗng; ống so màu nhận 2 mL nước cất và cùng số giọt halogen để so màu; lọ KI, NaCl, NaBr, nước cất có ống hút để lấy 2 mL; lọ nước Br₂ (bước 5) và nước I₂ (bước 6). Bước 6 có kệ ba ô để xếp hạng ba halogen. Cốc thải, vòi nước, bình tia để làm lại.',
       view: { target: [-0.2, 1.15, 0.4], w: 7.8, h: 3.0, el: 15, az: 0 },

@@ -4,6 +4,7 @@ import { makeHoodStand, makeHoodFlask, makeHoodFunnel, makeHoodWash, makeHoodTra
 import { canvasTexture } from '../../kit/materials.js';
 import { makeBeaker } from '../../kit/labware2.js';
 import { makeTestTube } from '../../kit/labware.js';
+import { SO, khayRong, deRong, cachXep, xepBan3d } from '../../kit/bo_cuc_ban.js';
 
 const palette = { graphite: '#182d39', steel: '#526e79', wood: '#995222', paper: '#fff5dd', amber: '#71330e', clear: '#b5d6d7', teal: '#006569' };
 const mat = (color, options) => new T.MeshStandardMaterial({ color, roughness: .48, ...options });
@@ -170,35 +171,9 @@ function makeBenchSink({ w = 2.1 } = {}) {
   g.userData = { spout, top: H+Ry, setFlow: on => { flow.visible = !!on; } };
   return g;
 }
-// BỐ CỤC BÀN ỐNG NGHIỆM theo ảnh của chủ (define mục 21.2 · 27/11): một hàng ngang nhìn gần như thẳng từ trước.
-// Trái: KHAY MẪU rồi KHAY THUỐC THỬ (hai khay nông tách nhau) · giữa: ĐẾ ỐNG xám, bảng tên từng ống ở mặt trước đế · phải: cốc thải, bình tia, chậu rửa.
-// Mỗi bước một cách xếp (số lọ, số ống khác nhau): S = lọ ở khay mẫu, R = lọ ở khay thuốc thử, T = ống trên đế kèm chữ ở bảng tên.
-// Khoá là chỉ số bước của bài (0 = bước 1); 'macdinh' dùng khi bàn hiện ở toàn cảnh. Bước 5, 6: ống so màu đứng GIỮA, sát cả hai ống thử.
-const LAYOUT = {
-  cl: {
-    2: { S: ['bBr', 'dW'], R: ['dCl'], T: [['tRef', 'Đối chứng'], ['tBr', 'Thí nghiệm']] },
-    3: { S: ['bI', 'dW'], R: ['dCl', 'dS'], T: [['tRef', 'Đối chứng'], ['tI', 'Thí nghiệm']] },
-    8: { S: [], R: ['dCl', 'dS', 'dBr'], T: [['tRef', 'Ống A'], ['tBr', 'Ống B'], ['tI', 'Ống C']] },
-    macdinh: { S: ['bBr', 'dW'], R: ['dCl', 'dS'], T: [['tRef', 'Đối chứng'], ['tBr', 'Thí nghiệm'], ['tI', 'Thí nghiệm']] },
-  },
-  bri: {
-    4: { S: ['bKI', 'bNaCl', 'dW'], R: ['dBr'], T: [['t1', 'Ống 1'], ['tW', 'So màu'], ['t2', 'Ống 2']] },
-    5: { S: ['bNaBr', 'bNaCl', 'dW'], R: ['dI'], T: [['t3', 'Ống 3'], ['tW', 'So màu'], ['t4', 'Ống 4']] },
-    macdinh: { S: ['dW'], R: ['dBr', 'dI'], T: [['t1', 'Ống 1'], ['t2', 'Ống 2'], ['tW', 'So màu'], ['t3', 'Ống 3'], ['t4', 'Ống 4']] },
-  },
-};
-const B_PITCH = .57, T_PITCH = .86, STAND_X = -.05, TRAY_Y = .03; // khoảng cách hai lọ trong khay · hai ống trên đế · tâm đế · đáy lòng khay
-const trayW = n => (n - 1) * B_PITCH + .72, standW = n => (n - 1) * T_PITCH + .64;
-// Từ một cách xếp ra toạ độ từng món: đế đứng ở tâm bàn, hai khay xếp sát về bên trái đế.
-function arrange(cfg) {
-  const pos = {}, nT = cfg.T.length, sw = standW(nT) + .36;
-  cfg.T.forEach(([id], i) => { pos[id] = [STAND_X + (i - (nT - 1) / 2) * T_PITCH, .1, 0]; });
-  let x = STAND_X - sw / 2 - .3; const trays = [];
-  for (const ids of [cfg.R, cfg.S]) { if (!ids.length) continue; const w = trayW(ids.length), c = x - w / 2;
-    ids.forEach((id, i) => { pos[id] = [c + (i - (ids.length - 1) / 2) * B_PITCH, TRAY_Y, 0]; }); trays.push({ x: c, n: ids.length }); x -= w + .14; }
-  return { pos, trays, stand: { n: nT, labels: cfg.T.map(t => t[1]) } };
-}
-const cfgOf = (B) => { const L = LAYOUT[B.id]; return L[B.opts.step] ? B.opts.step : 'macdinh'; };
+// BỐ CỤC BÀN ỐNG NGHIỆM (define mục 21.2 · 27/11): bảng vai trò nằm ở giáo án (bench.bo_cuc), cách tính ở kit/bo_cuc_ban.js, bàn 2D đọc cùng bảng.
+const B_PITCH = SO.lo, T_PITCH = SO.ong, STAND_X = SO.de_x, TRAY_Y = SO.khay_y, trayW = khayRong, standW = deRong, arrange = xepBan3d;
+const cfgOf = (B) => cachXep(B.d.bo_cuc, B.opts.step);
 function plate(text) {
   const c = document.createElement('canvas'); c.width = 384; c.height = 104; const x = c.getContext('2d');
   x.fillStyle = '#f4efe2'; x.beginPath(); x.roundRect(0, 0, 384, 104, 22); x.fill();
@@ -262,8 +237,8 @@ export function benchDeclaration(decl) {
       };
     }
     if (b.id !== 'cl' && b.id !== 'bri') return b;
-    // Bàn ống nghiệm: bố cục theo ảnh của chủ (xem LAYOUT). Vị trí từng món do atBy trả theo bước; đế và khay mỗi cách xếp một bộ, bước nào hiện bộ đó.
-    const L = LAYOUT[b.id], keys = Object.keys(L), plan = Object.fromEntries(keys.map(k => [k, arrange(L[k])]));
+    // Bàn ống nghiệm: bố cục theo ảnh của chủ (bảng bo_cuc của giáo án). Vị trí từng món do atBy trả theo bước; đế và khay mỗi cách xếp một bộ, bước nào hiện bộ đó.
+    const L = b.bo_cuc, keys = Object.keys(L), plan = Object.fromEntries(keys.map(k => [k, arrange(L[k])]));
     const atBy = id => B => plan[cfgOf(B)].pos[id] || null, first = id => plan.macdinh.pos[id] || Object.values(plan).map(p => p.pos[id]).find(Boolean);
     const sets = keys.flatMap(k => [
       { id: 'de_' + k, kind: 'rack', at: [STAND_X, 0], opts: {}, make3d: () => makeTubeStand(plan[k].stand), show: B => String(cfgOf(B)) === k },
