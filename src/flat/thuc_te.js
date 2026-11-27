@@ -111,10 +111,12 @@ export function createMission({ lessonMeta, application: A, bench }) {
       if (i === 0) put(host, h('p', { class: 'lk-msg', text: 'Nhiệm vụ của em: ' + M.goal }), A.media[0] && h('p', { class: 'lk-msg', style: 'font-size:12px;color:var(--muted)', text: `Ảnh: ${A.media[0].credit} · giấy phép: ${A.media[0].license}` }));
       if (i === 1) put(host, choice(A.hook.options, D.hook, (k) => { D.hook = k; save(); markDone(1); shell.refresh(); }), D.hook && h('p', { class: 'lk-msg', text: `Em chọn ${D.hook}. Đáp án hiện ở phần Bối cảnh thật.` }));
       if (i === 2) {
-        put(host, h('p', { class: 'lk-msg', text: A.context }),
+        // S3 (define 21.1): thẻ trái không phải cuộn ở 1440×900. Bối cảnh hiện câu đầu, phần còn lại sau "Đọc thêm"; nút nguồn nằm cùng dòng với số liệu.
+        const cut = A.context.indexOf('. ') + 1, lead = cut > 0 ? A.context.slice(0, cut) : A.context, rest = cut > 0 ? A.context.slice(cut).trim() : '';
+        put(host, h('p', { class: 'lk-msg', text: lead }), rest && h('details', { class: 'hg-more tt-more' }, h('summary', { text: 'Đọc thêm bối cảnh' }), h('p', { class: 'lk-msg', text: rest })),
           D.hook && h('div', { class: 'lk-concl' }, h('b', { text: `Câu hỏi mồi: em chọn ${D.hook}, đáp án ${A.hook.answer}` }), h('p', { text: A.hook.why })),
           h('ul', { class: 'lk-ideas' }, A.facts.map((f, n) => h('li', {}, f.text, badge(f.status || (f.assumed ? 'assumed' : 'ok')), ' ',
-            h('button', { class: 'lk-btn', type: 'button', style: 'margin-top:4px', 'aria-expanded': String(!!D.src[n]), onclick: () => { D.src[n] = !D.src[n]; save(); markDone(2); shell.refresh(); } }, D.src[n] ? 'Ẩn nguồn' : 'Xem nguồn'),
+            h('button', { class: 'lk-btn tt-src', type: 'button', 'aria-expanded': String(!!D.src[n]), onclick: () => { D.src[n] = !D.src[n]; save(); markDone(2); shell.refresh(); } }, D.src[n] ? 'Ẩn nguồn' : 'Xem nguồn'),
             D.src[n] && h('p', { class: 'lk-msg', style: 'font-size:12.5px' }, 'Nguồn: ', f.sourceUrl ? h('a', { href: f.sourceUrl, target: '_blank', rel: 'noopener noreferrer', text: f.source }) : f.source)))));
       }
       if (i === 3) put(host, h('div', { class: 'lk-concl' }, h('b', { text: 'Vị trí trong sách' }), h('p', { text: A.textbookLink.ref })), h('p', { class: 'lk-msg', style: 'color:var(--muted)', text: 'Chỉ ghi vị trí: ' + A.textbookLink.kind + '.' }));
@@ -125,7 +127,10 @@ export function createMission({ lessonMeta, application: A, bench }) {
     // Phần 6: dự đoán (A/B), tính (ô số, dấu phẩy), mở rộng; mỗi câu có lời giải hiện dần
     function questionsUI() {
       const Q = A.questions, [ansP, ansC, ansE] = A.answers, rev = (k, n) => { D.rev[k] = Math.max(D.rev[k] || 0, n); save(); shell.refresh(); };
-      const box = (title, ...kids) => h('div', { class: 'lk-box' }, h('h3', { text: title }), ...kids);
+      // S3: mỗi lần mở MỘT câu, hai câu kia thu thành một dòng bấm được. Mặc định mở câu dự đoán khi chưa chọn, sau đó là câu tính.
+      const open = S.qOpen ?? (D.q.predict ? 1 : 0), mark = [!!D.q.predict, !!D.q.computeOk, !!D.rev.e];
+      let qn = 0; const box = (title, ...kids) => { const k = qn++; return k === open ? h('div', { class: 'lk-box' }, h('h3', { text: title }), ...kids)
+        : h('button', { class: 'lk-box tt-qfold', type: 'button', 'aria-expanded': 'false', onclick: () => { S.qOpen = k; shell.refresh(); } }, h('span', { text: title }), h('em', { text: mark[k] ? '✓' : 'Mở' })); };
       const input = h('input', { type: 'text', inputmode: 'decimal', 'aria-label': 'Đáp số (' + Q.compute.unit + ')', value: D.q.compute ?? '', style: 'width:110px;padding:6px 8px;border:1px solid var(--control-border);border-radius:10px;font:inherit' });
       const parse = (s) => Number(String(s).trim().replace(/\s/g, '').replace(',', '.'));
       const doCheck = () => { D.q.compute = input.value; const v = parse(input.value); D.q.computeOk = Number.isFinite(v) && Math.abs(v - Q.compute.answer) <= Q.compute.tol; D.done[5] = Boolean(D.q.predict && D.q.computeOk); save(); shell.refresh(); };
@@ -144,13 +149,15 @@ export function createMission({ lessonMeta, application: A, bench }) {
     // ---------- Bảng điều khiển (phải) ----------
     function panel(i, host) {
       if (i !== 4) {
+        host.classList.remove('tt-compact'); host.classList.add('tt-list');
         put(host, ph('Bảng điều khiển', 'Tiến độ nhiệm vụ'),
           h('ol', { class: 'lk-proc' }, steps.map((s, n) => h('li', { class: 'lk-pstep' + (D.done[n] ? ' is-done' : '') + (n === i ? ' is-next' : '') }, h('span', { class: 'lk-pn', text: D.done[n] ? '✓' : String(n + 1) }), h('div', { class: 'lk-pb' }, h('button', { class: 'lk-btn' + (n === i ? ' is-pri' : ''), type: 'button', disabled: !canEnter(n), onclick: () => shell.go(n) }, s.short))))),
           i === 2 && h('div', { class: 'lk-box' }, h('h3', { text: 'Nguồn của nhiệm vụ' }), h('ul', { class: 'lk-ideas' }, A.sources.map((x) => h('li', {}, x.url ? h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer', text: x.text }) : x.text)))));
         S.ui = null; return;
       }
-      const label = h('span'), big = h('b'), unit = h('em'), cells = [0, 1, 2].map(() => vcard()), proc = h('div'), res = h('div');
+      const label = h('span'), big = h('b'), unit = h('em'), cells = [0, 1, 2].map(() => vcard()), proc = h('div', { class: 'hg-compact' }), res = h('div'); // việc đã xong thu thành một dòng (S4)
       const verdictBtns = h('div', { class: 'lk-seg', role: 'radiogroup', 'aria-label': 'Kết luận' }, [['dat', `Đạt (${fmt(LO)} đến ${fmt(HI)} ${UNIT})`], ['khong', 'Không đạt']].map(([v, t]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(D.verdict === v), class: D.verdict === v ? 'is-on' : '', onclick: () => { if (D.verdict !== v) { clearGrade(); shell.refresh(); } D.verdict = v; save(); shell.rerenderPanel(); } }, t)));
+      host.classList.remove('tt-list'); host.classList.add('tt-compact'); // S4: bảng phải không cuộn ở 1440×900
       put(host, ph('Bảng điều khiển', 'Tay làm trên bàn, hoặc bấm nút cùng số'),
         h('div', { class: 'lk-read' }, label, h('div', {}, big, unit)), h('div', { class: 'lk-vcards' }, cells.map((c) => c.el)),
         h('h3', { class: 'lk-sub', text: 'Việc trên bàn' }), proc,

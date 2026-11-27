@@ -174,6 +174,7 @@ export function createLab2d(host, decl, opts = {}) {
       if (it.spec.in && B.items[it.spec.in]) it.host = B.items[it.spec.in];
     });
     (d.pipes || []).forEach(([a, b]) => { if (B.items[a] && B.items[b]) B.pipes.push({ a: B.items[a], b: B.items[b], on: !d.pipesOff }); });
+    if (d.scene2d && d.scene2d.attach) d.scene2d.attach(B); // CẢNH TỰ VẼ (sa bàn · 27/11): xem drawBench
     benches[d.id] = B; list.push(B);
     layout(B); reset(B);
   }
@@ -994,8 +995,11 @@ export function createLab2d(host, decl, opts = {}) {
     return boxes;
   }
   // Vẽ MỘT bàn vào khung R (điểm ảnh canvas): tường, mặt bàn, dụng cụ, ống dẫn, nhãn. tags = false: ảnh nhỏ (xem cả phòng, snapshot)
+  // CẢNH TỰ VẼ (27/11, bài sa bàn không có ảnh dụng cụ sẵn): bàn khai scene2d = { attach(B), draw(c, B, R, info), hit(sx, sy, B) } thì cả phần hình của bàn do scene2d vẽ
+  // (sơ đồ nhà máy, mặt cắt lò…) và tự bắt chạm (hit trả về id món). Việc, lời nhắc, lần chạy, nút sinh đôi vẫn do bộ máy này lo như mọi bàn. Bàn không khai thì như cũ.
   function drawBench(B, R, { tags = true, dpr = 1 } = {}) {
     B_cur = B;
+    if (B.d.scene2d) { c.save(); c.beginPath(); c.rect(R.x, R.y, R.w, R.h); c.clip(); B.d.scene2d.draw(c, B, R, { dpr, t: T0, names, tags }); c.restore(); B.view = { SC: 1, OX: 0, OY: 0, rx: R.x, ry: R.y, rw: R.w, rh: R.h }; return []; }
     const rows = B.tagRows || { low: 1, high: 0 }, rowH = R.w < 620 * dpr ? 24 : 26, FRONT = tags ? (14 + Math.max(1, rows.low) * rowH) * dpr : 6 * dpr, TOP = tags ? (rows.high ? rows.high * rowH + 10 : 6) * dpr : 4 * dpr;
     const bd = B.bounds, sw = bd.x1 - bd.x0, SC0 = Math.min(R.w / sw, Math.max(10, R.h - FRONT - TOP) / bd.top), OX0 = R.x + (R.w - sw * SC0) / 2 - bd.x0 * SC0;
     const island = B.d.island !== false, OY0 = island ? Math.max(R.y + TOP + bd.top * SC0, R.y + (R.h - bd.top * SC0 - FRONT - TOP) / 2 + TOP + bd.top * SC0) : R.y + (R.h + bd.top * SC0) / 2;
@@ -1151,6 +1155,7 @@ export function createLab2d(host, decl, opts = {}) {
   const toCanvas = (e) => { const r = cv.getBoundingClientRect(), k = cv.width / Math.max(1, r.width); return { sx: (e.clientX - r.left) * k, sy: (e.clientY - r.top) * k }; };
   function itemAt(p) {
     const B = active && benches[active]; if (!B || !B.view) return null;
+    if (B.d.scene2d) { const id = B.d.scene2d.hit(p.sx, p.sy, B); return (id && B.items[id]) || null; }
     const tg = tagBoxes.find((b) => p.sx >= b.l && p.sx <= b.r && p.sy >= b.t && p.sy <= b.b); if (tg) return B.items[tg.id];
     const V = B.view, x = (p.sx - V.OX) / V.SC, y = (p.sy - V.OY) / V.SC;
     const hit = Object.values(B.items).filter((it) => it.visible && it.touch && it.kind !== 'gasrig' && !it.K.backdrop).filter((it) => { const pad = 0.6; return x >= it.pos.x - it.L - pad && x <= it.pos.x + it.R + pad && y >= it.pos.y - it.h - pad && y <= it.pos.y + 1.2; });
@@ -1178,7 +1183,7 @@ export function createLab2d(host, decl, opts = {}) {
   const noop = () => {};
   const api = {
     mode: '2d', stage, benches, CABINET: KIND2D, missing: MISSING.filter((k) => decls.some((d) => d.items.some((it) => it.kind === k))), canvas: cv,
-    view: noop, zoomBy: noop, zoomReset() { stage.resetView(); }, zoomPct: () => 100, dragMode: () => 'none', // chỉ có nghĩa ở 3D
+    view: noop, frame: noop, zoomBy: noop, zoomReset() { stage.resetView(); }, zoomPct: () => 100, dragMode: () => 'none', // chỉ có nghĩa ở 3D
     setActive(id) { if (active && active !== id && benches[active]) { const A = benches[active]; A.seq.flush(); A.focus = null; A.zoomK = 0; } active = id && benches[id] ? id : ONE ? ONE.id : null; },
     active: () => active,
     setNames(on) { names = on; },

@@ -8,12 +8,14 @@ import { addLights } from './room.js';
 // leader = true: nhãn đứng cao hơn điểm neo và có đường dẫn + chấm neo chỉ vào vật (mặc định tắt, giữ nguyên cách cũ).
 // oversample > 1: vẽ dày hơn số điểm ảnh thật của màn hình chừng đó lần rồi thu lại (viền thuỷ tinh mảnh bớt răng cưa, bớt lấp lánh; có tác dụng trên màn hình thường
 // và khi trình duyệt đang thu nhỏ trang). Vẫn bị chặn ở 2 lần điểm ảnh CSS như cũ. Mặc định 1 = như cũ. Không áp cho điện thoại.
-export function createStage(host, { leader = false, oversample = 1 } = {}) {
+// smooth (27/11, đối chiếu Lab-SML): máy quay lia tới khung mới theo kiểu rời chậm, đi nhanh ở giữa, hãm trước đích, thời lượng cố định (p.dur, mặc định 0,7 giây).
+// maxRatio: chặn trên của tỉ lệ điểm ảnh vẽ. Cả hai mặc định như cũ, nên bản 1 và bản 2 không đổi; bộ máy bài học (kit/labset.js) mới bật.
+export function createStage(host, { leader = false, oversample = 1, smooth = false, maxRatio = 2 } = {}) {
   const mobile = matchMedia('(max-width: 899px)').matches || navigator.maxTouchPoints > 1;
   QUALITY.mobile = mobile;
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   const FILM = /[?&]film=1/.test(location.search); // chế độ quay phim: không tự chạy, vẽ dày gấp ba để phóng to vẫn nét
-  const ratio = () => (FILM ? 3 : Math.min((window.devicePixelRatio || 1) * (window.__uiZoom || 1) * (mobile ? 1 : oversample), 2)); // vẽ đủ điểm ảnh của màn hình, kể cả khi trang được phóng bằng CSS zoom
+  const ratio = () => (FILM ? 3 : Math.min((window.devicePixelRatio || 1) * (window.__uiZoom || 1) * (mobile ? 1 : oversample), maxRatio)); // vẽ đủ điểm ảnh của màn hình, kể cả khi trang được phóng bằng CSS zoom
   renderer.setPixelRatio(ratio());
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.3;
@@ -36,7 +38,7 @@ export function createStage(host, { leader = false, oversample = 1 } = {}) {
   Object.assign(controls, { enableDamping: true, dampingFactor: 0.08, enablePan: false, minPolarAngle: 0.35, maxPolarAngle: 1.5, rotateSpeed: 0.6, zoomSpeed: 0.7 }); // xoay đủ 360 độ quanh bàn
 
   // ----- Máy quay tự lia tới khung cần nhìn -----
-  let preset = null, goal = null, userMoved = false;
+  let preset = null, goal = null, userMoved = false, tween = null;
   const tmp = new THREE.Vector3();
   // Vùng an toàn: phần khung KHÔNG bị bảng nổi che (tỉ lệ 0..1 tính từ mỗi mép). Mặc định 0 = cả khung, giữ nguyên cách cũ.
   // Khi có vùng an toàn, khung cần nhìn được canh vừa và nằm giữa vùng đó (dời tâm chiếu, không đổi vị trí vật).
@@ -82,9 +84,10 @@ export function createStage(host, { leader = false, oversample = 1 } = {}) {
     const s = solve(p); presetDist = s.dist;
     controls.minDistance = s.dist * 0.4; controls.maxDistance = Math.min(Math.max(s.dist * 1.6, 12), p.maxDist || 16.5); // không lùi xuyên tường, tủ (khung nhìn có thể tự nới bằng maxDist khi phòng trống)
     limit(p, false);
-    if (immediate) { camera.position.copy(s.pos); controls.target.copy(s.target); camera.fov = s.fov; cy = s.cy; applyInsets(); camera.updateProjectionMatrix(); goal = null; limit(p, true); controls.update(); } else goal = s;
+    if (immediate) { camera.position.copy(s.pos); controls.target.copy(s.target); camera.fov = s.fov; cy = s.cy; applyInsets(); camera.updateProjectionMatrix(); goal = null; tween = null; limit(p, true); controls.update(); }
+    else { goal = s; tween = smooth ? { p: camera.position.clone(), t: controls.target.clone(), f: camera.fov, c: cy, u: 0, dur: p.dur || 0.7 } : null; }
   }
-  controls.addEventListener('start', () => { if (goal) { goal = null; limit(preset, true); } setMoved(true); });
+  controls.addEventListener('start', () => { if (goal) { goal = null; tween = null; limit(preset, true); } setMoved(true); });
 
   // ----- Nhãn dụng cụ (HTML nổi trên cảnh) -----
   const tagLayer = document.createElement('div'); tagLayer.className = 'lk-tags'; host.appendChild(tagLayer);
@@ -175,7 +178,13 @@ export function createStage(host, { leader = false, oversample = 1 } = {}) {
   }
   new ResizeObserver(resize).observe(host);
   function advance(dt) {
-    if (goal) {
+    if (goal && tween) { // lia có tăng tốc và hãm: nội suy cả vị trí máy lẫn tâm nhìn theo đường bậc hai
+      const g = tween; g.u = Math.min(1, g.u + dt / g.dur); const e = g.u < 0.5 ? 2 * g.u * g.u : 1 - Math.pow(-2 * g.u + 2, 2) / 2;
+      camera.position.lerpVectors(g.p, goal.pos, e); controls.target.lerpVectors(g.t, goal.target, e);
+      if (Math.abs(g.f - goal.fov) > 0.01) { camera.fov = g.f + (goal.fov - g.f) * e; camera.updateProjectionMatrix(); }
+      if (Math.abs(g.c - goal.cy) > 0.001) { cy = g.c + (goal.cy - g.c) * e; applyInsets(); }
+      if (g.u >= 1) { camera.fov = goal.fov; cy = goal.cy; applyInsets(); camera.updateProjectionMatrix(); goal = null; tween = null; limit(preset, true); }
+    } else if (goal) {
       const k = 1 - Math.exp(-dt * 4.5);
       camera.position.lerp(goal.pos, k); controls.target.lerp(goal.target, k);
       if (Math.abs(camera.fov - goal.fov) > 0.01) { camera.fov += (goal.fov - camera.fov) * k; camera.updateProjectionMatrix(); }
@@ -199,6 +208,8 @@ export function createStage(host, { leader = false, oversample = 1 } = {}) {
   return {
     setEnvironment, THREE, scene, camera, renderer, controls, mobile, focus, setInsets, addTag, setTag, pickable, unpickable,
     onFrame: (f) => frames.push(f), onAfterRender: (f) => after.push(f), setHoverHandler: (f) => { onHover = f; }, hovered: () => hoverId, setPickHandler: (f) => { onPick = f; },
+    // Biên dịch sẵn shader của mọi vật liệu trong cảnh (kể cả món đang ẩn) để lần đầu một món hiện ra không bị khựng
+    precompile: () => { try { const r = renderer.compileAsync ? renderer.compileAsync(scene, camera) : renderer.compile(scene, camera); if (r && r.catch) r.catch(() => {}); } catch (e) { /* không biên dịch trước được thì vẽ như thường */ } },
     resetView: () => { if (preset) focus(preset); }, // lia về khung chuẩn của bước
     setMoveHandler: (f) => { onMove = f; }, // báo khi người dùng tự xoay, phóng (true) và khi máy quay về khung chuẩn (false)
     zoom: () => (goal ? 1 : camera.position.distanceTo(controls.target) / presetDist), // 1 = đúng khung chuẩn, lớn hơn 1 = đã lùi ra xa

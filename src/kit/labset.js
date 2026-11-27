@@ -168,7 +168,7 @@ function makeSeq() {
 export function createLab(host, decl) {
   QUALITY.fresnel = true; QUALITY.edge = true; // thuỷ tinh: giữa thân trong, mép đậm
   const M3 = decl.mode3d || decl; // phần chỉ có nghĩa ở 3D (room, props, overview); giáo án cũ khai thẳng ở decl vẫn đọc được
-  const stage = createStage(host, { leader: true, oversample: decl.oversample ?? 1.75 }), { scene } = stage; // vẽ dày gấp 1,75 lần điểm ảnh thật: thuỷ tinh nét hơn, bớt lấp lánh
+  const stage = createStage(host, { leader: true, oversample: decl.oversample ?? 1.75, smooth: true, maxRatio: 1.75 }), { scene } = stage; // vẽ dày gấp 1,75 lần điểm ảnh thật: thuỷ tinh nét hơn, bớt lấp lánh
   const WALL = decl.wall ?? 0x768297, TOP = (M3.room && M3.room.top) ?? decl.top ?? 0x929dab; // nền tối hơn dụng cụ một bậc (chủ 19/11)
   scene.background.set(WALL);
   // mode3d.room = { photo: thư mục ảnh bốn bức tường } thì phòng dùng ảnh phòng lab thật (như bản 1); không khai thì phòng trơn.
@@ -280,6 +280,8 @@ export function createLab(host, decl) {
 
   // ---------- Trạng thái một bàn ----------
   function reset(B) {
+    // atBy(B) (27/11): món đổi chỗ theo bước của bài (cùng một ống đứng ở lỗ khác nhau giữa các bước); trả [x, z] hoặc [x, y, z], trả null thì giữ chỗ cũ
+    Object.values(B.items).forEach((it) => { const p = it.spec.atBy && it.spec.atBy(B); if (p) { it.home.set(p[0], p.length === 3 ? p[1] : 0, p[p.length - 1]); it.obj.position.copy(it.home); } });
     B.st = {}; B.level = { ...(B.d.ref || {}) }; B.run = null; B.loaded = false; B.rinsing = false; B.stream.visible = false; B.pulse = {}; if (B.counter) count(B, null); (B.streams || []).forEach((st) => { st.visible = false; });
     Object.entries(B.tagEls).forEach(([id, el]) => { stage.setTag(B.id + '/' + id, { done: false }); el.classList.remove('is-pop'); });
     Object.values(B.vessel).forEach((v) => { v.o.position.copy(v.item.home); v.o.rotation.z = 0; v.clear(); v.setFill(B.d.prefill ? 1 : 0); });
@@ -444,7 +446,7 @@ export function createLab(host, decl) {
     B.counter.v = v; B.counter.tip = tip; stage.setTag(id, v ? { text, visible: true, active: true } : { visible: false });
   }
   // CẬN CẢNH (H1, H2): bàn khai closeup thì lúc đang thao tác khung tự phóng tới cụm món đang dùng (ids + các điểm extra, toạ độ phòng), xong thì lùi ra (xem fitPoints, fitUpdate)
-  function setFocus(B, ids, extra = []) { if (!B.d.closeup) return; B.focusN = (B.focusN || 0) + 1; B.focus = { ids: ids.filter((id) => B.items[id]), extra, key: B.focusN }; B.focusHold = B.d.closeupHold || 0.8; FIT.slow = 1.6; }
+  function setFocus(B, ids, extra = []) { if (!B.d.closeup) return; B.focusN = (B.focusN || 0) + 1; B.focus = { ids: ids.filter((id) => B.items[id]), extra, key: B.focusN }; B.focusHold = B.d.closeupHold || 0.8; FIT.slow = 1.6; glide(); }
   const fmtMl = (x) => (Math.abs(x - Math.round(x)) < 0.05 ? String(Math.round(x)) : x.toFixed(1).replace('.', ','));
   // Ống hút của lọ (opts.pip): lọ ĐỨNG YÊN; rút ống hút thẳng lên khỏi lọ, đưa tới ngay trên miệng ống (thẳng đứng, đầu ống hút cách miệng 0,7 cm, không chạm), rồi:
   //   việc nhỏ giọt: từng giọt rơi (dropTimes), bộ đếm "7/20 giọt", mực dâng theo từng giọt (dropMl mL mỗi giọt, mặc định 0,05);
@@ -889,27 +891,34 @@ export function createLab(host, decl) {
   // máy quay đứng ở chỗ gần nhất mà mọi góc hộp vẫn nằm trong phần cảnh không bị bảng che (stage.insets), ở đúng hướng đang nhìn. Người dùng xoay thì giải lại
   // mỗi khung hình, nên xoay góc nào bộ dụng cụ cũng nằm giữa hai bảng. Tự phóng to hoặc dời khung (cuộn, nút +, Shift + kéo) thì thôi canh, tới khi về khung chuẩn.
   // Chỉ màn từ 900 px (màn hẹp không có bảng nổi). Giáo án vẫn quyết hướng nhìn (az, el), ống kính (fov) và chiều cao khung (h).
-  const FIT = { on: false, pend: 0, moved: false, sig: '', ref: 0, pts: [], ext: [], age: 9, key: '', slow: 0, cam: new THREE.PerspectiveCamera(), last: V3(), ctr: V3() };
+  const FIT = { on: false, pend: 0, moved: false, sig: '', ref: 0, pts: [], ext: [], age: 9, key: '', slow: 0, cam: new THREE.PerspectiveCamera(), last: V3(), ctr: V3(), g: null, drag: false, hold: 0 };
+  // Chuyển động máy quay (27/11, đối chiếu Lab-SML). glide: vào hoặc ra cận cảnh đi theo kiểu rời chậm, hãm trước đích trong dur giây.
+  // drag / hold: đang kéo xoay thì khung KHÔNG tự canh (xoay quanh một tâm, vật không to nhỏ theo góc); thả tay, chờ quán tính lắng rồi mới lia về khung vừa.
+  function glide(dur = 0.9) { FIT.g = { p: stage.camera.position.clone(), t: stage.controls.target.clone(), u: 0, dur }; }
   const D2R = THREE.MathUtils.degToRad, FIT_X = 6, FIT_T = 44, FIT_B = 10; // lề thêm (điểm ảnh): hai bên, phía trên (chỗ cho nhãn nằm trên món cao nhất), phía dưới
-  const fitBase = (B) => (B.solo ? B.viewSolo : B.view);
+  // KHUNG THEO BƯỚC (sa bàn · 27/11): bài học gọi api.frame(bid, ids, view) để khung chuẩn của bàn chỉ canh theo một nhóm món (một khu của sa bàn), có thể kèm hướng nhìn riêng (az, el).
+  // Khác cận cảnh (B.focus, tạm thời lúc tay đang làm): khung theo bước giữ nguyên tới khi bài học đổi. Bàn không gọi frame thì mọi thứ như cũ.
+  // Màn hẹp không có bảng nổi nên stage.insets trống: bàn đang có khung theo bước thì dùng lề cố định (chừa thanh chế độ ở trên, thẻ phương trình ở dưới).
+  const INS0 = { l: 0, r: 0, t: 0.17, b: 0.15 }, insOf = (B) => stage.insets || (B && B.frame ? INS0 : null);
+  const fitBase = (B) => { const v = B.solo ? B.viewSolo : B.view; return B.frame && B.frame.view ? { ...v, ...B.frame.view } : v; };
   const fitSig = (id, B) => { const i = stage.insets || {}; return [host.clientWidth, host.clientHeight, i.l, i.r, i.t, i.b].map((v) => (+v || 0).toFixed(4)).join('|') + '|' + id + '|' + (B.solo || ''); };
   function fitPoints(B) { // góc hộp bao (toạ độ phòng) của mọi món đang hiện; đo lại mỗi 0,3 giây, đứng yên khi tay đang cầm món di chuyển
-    const F = B.focus, key = B.id + '|' + (B.solo || '') + '|' + (F ? F.key : 0); // F: cụm cận cảnh đang thao tác (setFocus): chỉ canh theo các món đó
+    const F = B.focus, FR = !F && B.frame ? B.frame : null, key = B.id + '|' + (B.solo || '') + '|' + (F ? F.key : 0) + '|' + (FR ? FR.key : 0); // F: cụm cận cảnh đang thao tác (setFocus): chỉ canh theo các món đó
     if (key === FIT.key && FIT.pts.length && (FIT.age < 0.3 || B.seq.busy() || F)) return;
     FIT.key = key; FIT.age = 0; const pts = FIT.pts = [];
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     Object.values(B.items).forEach((it) => {
-      if (!it.obj.visible || (F && !F.ids.includes(it.id))) return; const p = it.obj.getWorldPosition(V3()); pts.push(p);
+      if (!it.obj.visible || (F && !F.ids.includes(it.id)) || (FR && !FR.ids.includes(it.id))) return; const p = it.obj.getWorldPosition(V3()); pts.push(p);
       partBoxes(it).forEach(([a, b]) => { for (let i = 0; i < 8; i++) pts.push(V3(p.x + (i & 1 ? b.x : a.x), p.y + (i & 2 ? b.y : a.y), p.z + (i & 4 ? b.z : a.z))); });
     });
     if (F) F.extra.forEach((p) => pts.push(p.clone()));
     pts.forEach((p) => { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
     const v = fitBase(B), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2; FIT.ctr.set(cx, v.target[1], cz);
-    FIT.ext = F ? [] : [V3(cx, v.target[1] - v.h / 2, cz), V3(cx, v.target[1] + v.h / 2, cz)]; // chiều cao khung theo giáo án: chỉ tính cho chiều dọc (cận cảnh thì chỉ theo cụm món)
+    FIT.ext = F || FR ? [] : [V3(cx, v.target[1] - v.h / 2, cz), V3(cx, v.target[1] + v.h / 2, cz)]; // chiều cao khung theo giáo án: chỉ tính cho chiều dọc (cận cảnh thì chỉ theo cụm món)
   }
   // Giải vị trí máy quay cho hướng nhìn và ống kính của cam: gần nhất mà mọi điểm vẫn nằm trong phần cảnh không bị che, bộ dụng cụ nằm giữa phần đó.
   function fitSolve(cam) {
-    const w = host.clientWidth, h = host.clientHeight, ins = stage.insets; if (!w || !h || !ins || !FIT.pts.length) return null;
+    const w = host.clientWidth, h = host.clientHeight, ins = insOf(active && benches[active]); if (!w || !h || !ins || !FIT.pts.length) return null;
     const e = cam.projectionMatrix.elements, q = cam.quaternion, r = V3(1, 0, 0).applyQuaternion(q), u = V3(0, 1, 0).applyQuaternion(q), f = V3(0, 0, -1).applyQuaternion(q);
     const X0 = Math.max(ins.l * w + FIT_X, 22), X1 = w - Math.max(ins.r * w + FIT_X, 22), Y0 = ins.t * h + FIT_T, Y1 = h - ins.b * h - FIT_B; // không có bảng bên cạnh (ba cột) vẫn chừa 22 px tới mép cảnh
     const A = (2 * X0 / w - 1 + e[8]) / e[0], Bq = (2 * X1 / w - 1 + e[8]) / e[0], C = (1 - 2 * Y1 / h + e[9]) / e[5], D = (1 - 2 * Y0 / h + e[9]) / e[5]; // mép trái, phải, dưới, trên tính theo tang góc nhìn
@@ -924,14 +933,14 @@ export function createLab(host, decl) {
   // Khung chuẩn của một bàn, đưa cho stage.focus: cùng hướng nhìn với giáo án, nhưng tâm và khoảng cách lấy từ lời giải ở trên.
   // Khung tự canh và cận cảnh chạy ở màn rộng (từ 900 px). Bàn khai closeup thì chạy cả ở màn hẹp: lúc nhỏ giọt, lúc phản ứng máy quay vẫn tới gần ống
   // (chủ 27/11 xem ở khung 850 px: "sao lúc xảy ra phản ứng k mô tả hay zoom gần vào nhỉ"). Bàn không khai closeup giữ nguyên cách cũ.
-  const fitOK = (B) => WIDE.matches || !!(B && B.d.closeup);
+  const fitOK = (B) => WIDE.matches || !!(B && (B.d.closeup || B.frame));
   function fitView(B) {
-    const base = fitBase(B), w = host.clientWidth, h = host.clientHeight, ins = stage.insets;
+    const base = fitBase(B), w = host.clientWidth, h = host.clientHeight, real = stage.insets, ins = insOf(B);
     if (!fitOK(B) || !ins || !w || !h) return base;
     FIT.age = 9; fitPoints(B);
     const c = FIT.cam, az = D2R(base.az || 0), el = D2R(base.el ?? 16), cyv = base.cy ?? 0.5;
     c.fov = base.fov || 28; c.aspect = w / h;
-    const ox = ((ins.r - ins.l) / 2) * w, oy = (0.5 - ins.t - (1 - ins.t - ins.b) * cyv) * h; // cùng cách dời tâm chiếu với stage.js (applyInsets)
+    const ox = real ? ((ins.r - ins.l) / 2) * w : 0, oy = real ? (0.5 - ins.t - (1 - ins.t - ins.b) * cyv) * h : 0; // cùng cách dời tâm chiếu với stage.js (applyInsets); màn hẹp không dời
     if (Math.abs(ox) > 0.5 || Math.abs(oy) > 0.5) c.setViewOffset(w, h, ox, oy, w, h); else c.clearViewOffset();
     c.updateProjectionMatrix(); c.position.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)); c.up.set(0, 1, 0); c.lookAt(0, 0, 0);
     const s = fitSolve(c); if (!s || !(s.depth > 0.5)) return base;
@@ -940,7 +949,8 @@ export function createLab(host, decl) {
     return { ...base, target: [T.x, T.y, T.z], w: (2 * d * t * c.aspect * fw) / 1.04, h: 0.001, maxDist: Math.max(base.maxDist || 16.5, d * 1.3) }; // w chọn sao cho stage.js (solve) ra đúng khoảng cách d
   }
   const zoomNow = () => (active && fitOK(benches[active]) && FIT.ref ? (FIT.on ? 1 : stage.camera.position.distanceTo(CTRL.target) / FIT.ref) : stage.zoom()); // 1 = đúng khung chuẩn, lớn hơn 1 = đã lùi ra
-  CTRL.addEventListener('start', () => { FIT.moved = true; FIT.pend = 0; });
+  CTRL.addEventListener('start', () => { FIT.moved = true; FIT.pend = 0; FIT.drag = true; FIT.g = null; });
+  CTRL.addEventListener('end', () => { FIT.drag = false; FIT.hold = 0.45; });
   host.addEventListener('wheel', () => { FIT.on = false; }, { passive: true, capture: true });
   let fitTouch = 0; // số ngón tay đang đặt trên cảnh: từ hai ngón là dời hoặc phóng
   host.addEventListener('pointerdown', (e) => {
@@ -955,16 +965,20 @@ export function createLab(host, decl) {
   }
   ['pointerup', 'pointercancel'].forEach((n) => window.addEventListener(n, (e) => { if (e.pointerType === 'touch') fitTouch = Math.max(0, fitTouch - 1); }));
   function fitUpdate(dt) {
-    const B = active && benches[active]; if (!B || !fitOK(B) || !stage.insets) return;
+    const B = active && benches[active]; if (!B || !fitOK(B) || !insOf(B)) return;
     const cam = stage.camera, sig = fitSig(active, B), mv = cam.position.distanceTo(FIT.last); FIT.last.copy(cam.position); FIT.age += dt;
     // Bảng thu gọn, cửa sổ đổi cỡ, đổi chế độ một bình: khung chuẩn cũ không còn đúng. Chưa ai đụng vào máy quay thì lia tới khung chuẩn mới.
     if (sig !== FIT.sig) { FIT.sig = sig; if (!FIT.moved && FIT.on) { stage.focus(fitView(B)); FIT.pend = 3; return; } }
     if (FIT.pend > 0) { FIT.pend -= dt; if (FIT.pend < 2.8 && mv < 1e-5) FIT.pend = 0; return; } // stage.js đang tự lia tới khung chuẩn: chờ tới nơi
     if (!FIT.on) return;
+    if (FIT.drag) return;
+    if (FIT.hold > 0) { FIT.hold -= dt; if (FIT.hold > 0) return; glide(0.5); }
     fitPoints(B); const s = fitSolve(cam); if (!s) return;
     if (FIT.slow > 0) FIT.slow -= dt; // vào hoặc ra cận cảnh: lia chậm hơn để mắt theo kịp
     const d = clamp(s.depth, CTRL.minDistance * 1.02, CTRL.maxDistance * 0.98), T = TMPV.copy(s.pos).addScaledVector(s.f, d), k = Math.min(1, dt * (FIT.slow > 0 ? 2.6 : 8));
-    if (cam.position.distanceToSquared(s.pos) > 1e-8 || CTRL.target.distanceToSquared(T) > 1e-8) { cam.position.lerp(s.pos, k); CTRL.target.lerp(T, k); FIT.last.copy(cam.position); }
+    if (FIT.g) { const g = FIT.g; g.u = Math.min(1, g.u + dt / g.dur); const e = g.u < 0.5 ? 2 * g.u * g.u : 1 - Math.pow(-2 * g.u + 2, 2) / 2;
+      cam.position.lerpVectors(g.p, s.pos, e); CTRL.target.lerpVectors(g.t, T, e); FIT.last.copy(cam.position); if (g.u >= 1) FIT.g = null; }
+    else if (cam.position.distanceToSquared(s.pos) > 1e-8 || CTRL.target.distanceToSquared(T) > 1e-8) { cam.position.lerp(s.pos, k); CTRL.target.lerp(T, k); FIT.last.copy(cam.position); }
     FIT.ref = d;
   }
 
@@ -979,6 +993,8 @@ export function createLab(host, decl) {
       const v = B ? fitView(B) : VIEWS.all; if (B) FIT.sig = fitSig(id, B);
       stage.focus(v, immediate);
     },
+    // Khung theo bước: ids = các món khung chuẩn phải ôm trọn (null = cả bàn), view = { az, el } nếu bước cần hướng nhìn riêng. Gọi xong thì gọi view(bid) để máy quay lia tới.
+    frame(bid, ids, view) { const B = benches[bid]; if (!B) return; const k = ids && ids.filter((id) => B.items[id]); B.frame = k && k.length ? { ids: k, view: view || null, key: (B.frameN = (B.frameN || 0) + 1) } : null; FIT.age = 9; },
     // Tới gần một bàn (id) hoặc về toàn cảnh (null). Rời bàn nào thì động tác đang dở của bàn đó được làm xong ngay.
     setActive(id) { if (active && active !== id && benches[active]) benches[active].seq.flush(); active = id && benches[id] ? id : null; zoomGoal = null; if (!active) FIT.on = false; camMode(); syncScene(); },
     // THANH MỨC ZOOM: 100% = khung chuẩn của bàn (hoặc của cả phòng). zoomBy(1.35) = tới gần hơn một nấc, zoomBy(1 / 1.35) = lùi ra một nấc; trong giới hạn của khung đang xem.
@@ -1047,7 +1063,7 @@ export function createLab(host, decl) {
       }
       list.forEach((B) => {
         const was = B.seq.busy(); B.seq.tick(dt); if (was && !B.seq.busy()) syncRings(B);
-        if (B.focus) { if (B.seq.busy() || (B.run && !B.run.done)) B.focusHold = B.d.closeupHold || 0.8; else if ((B.focusHold -= dt) <= 0) { B.focus = null; FIT.slow = 1.6; } } // xong thao tác (và lần chạy ngắn sau nó) thì lùi ra
+        if (B.focus) { if (B.seq.busy() || (B.run && !B.run.done)) B.focusHold = B.d.closeupHold || 0.8; else if ((B.focusHold -= dt) <= 0) { B.focus = null; FIT.slow = 1.6; glide(); } } // xong thao tác (và lần chạy ngắn sau nó) thì lùi ra
         if (B.run && !B.run.done && !B.rinsing && !B.seq.busy()) {
           const sp = B.d.chem.speed; B.run.t += dt * (typeof sp === 'function' ? B.d.chem.speed(B) : sp || 1);
           const r = B.d.chem.frame(B, B.run.t);
@@ -1066,6 +1082,7 @@ export function createLab(host, decl) {
     },
   };
   // "Về góc chuẩn" và bấm con số phần trăm: ở một bàn thì về khung chuẩn vừa giải lại (bộ dụng cụ có thể đã đổi từ lần lia trước), không dùng lại khung cũ.
+  let warm = 0; stage.onFrame(() => { if (warm >= 0 && ++warm === 4) { warm = -1; stage.precompile(); } }); // sau vài khung đầu: biên dịch sẵn shader, kể cả món đang ẩn
   const reset0 = stage.resetView; stage.resetView = () => { if (active && fitOK(benches[active])) api.view(active); else reset0(); };
   return api;
 }

@@ -165,7 +165,7 @@ export function createLesson(shell) {
   function tick(dt) {
     if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.hidden = true; }
     if (cam0 && resetBtn.hidden && stage.camera.position.distanceTo(cam0) > 0.08) { resetBtn.hidden = false; if (S.step === 0) { S.moved = true; check(); } }
-    S.acc += dt; if (S.acc >= 0.15) { S.acc = 0; syncRead(); syncP3(); }
+    S.acc += dt; if (S.acc >= 0.15) { S.acc = 0; syncRead(); syncP3(); syncExamLock(); }
   }
 
   // ---------- Bảng điều khiển (phải) ----------
@@ -224,10 +224,13 @@ export function createLesson(shell) {
     return ref ? `${r.phen} Màu ${ref.hex === r.hex ? 'giống' : 'khác'} ống so màu.` : r.phen;
   }
   // Bước 9: ba ống mất nhãn, 3 lọ; bấm ô để nhỏ, chọn nhãn rồi Chấm
+  // S5 (define 21.1): bàn đang bận (tay cầm ống hút, phản ứng đang chạy) thì các ô thử ở bước 9 khoá lại, xong việc mới mở
+  const benchBusy = (B) => !!B && (B.seq.busy() || !!(B.run && !B.run.done));
+  function syncExamLock() { if (S.step !== 8) return; const busy = benchBusy(lab.benches.cl); shell.els.panel.querySelectorAll('.hg-exam button').forEach((b) => { if (b.disabled !== busy) b.disabled = busy; }); }
   function examUI() {
     const B = lab.benches.cl, res = (tube, chem) => (B.data.res && B.data.res[tube] || []).find((r) => r.chem === chem);
     const cell = (tube, chem) => { const r = res(tube, chem); return h('td', { style: 'white-space:normal' }, r ? [dot(r.hex), r.kind === 'reaction' ? (r.ppt ? 'kết tủa' : 'đổi màu') : r.kind === 'indicator' ? r.phenomenon.replace('Hồ tinh bột hoá ', '').replace('.', '') : 'không đổi']
-      : h('button', { class: 'lk-btn', type: 'button', onclick: () => { if (!lab.act('cl', `x_${tube}_${chem}`)) toast('Chờ một chút: tay đang thao tác.'); } }, 'Nhỏ')); };
+      : h('button', { class: 'lk-btn', type: 'button', disabled: benchBusy(B) || null, onclick: () => { if (!lab.act('cl', `x_${tube}_${chem}`)) toast('Chờ một chút: tay đang thao tác.'); } }, 'Nhỏ')); };
     const sel = (tube) => h('select', { 'aria-label': 'Nhãn của ống', onchange: (e) => { D.examLabel[tube] = e.target.value;
       D.examOk = false; D.done[8] = false;
       shell.save(); shell.refresh(); } },

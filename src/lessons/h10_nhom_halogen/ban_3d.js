@@ -69,20 +69,6 @@ function makeRankBottle({ title, sub, hex }) {
 }
 
 const pitch = .47, tubeRadius = .112;
-function makeRack() {
-  const rack = new T.Group(), wood = mat(palette.wood), graphite = mat(palette.graphite);
-  const shape = new T.Shape();
-  shape.moveTo(-1.19,-.44); shape.lineTo(1.19,-.44); shape.lineTo(1.19,.44); shape.lineTo(-1.19,.44); shape.closePath();
-  for (let n = -2; n <= 2; n++) {
-    const hole = new T.Path(); hole.absarc(n*pitch,-.22,tubeRadius+.028,0,Math.PI*2,true); shape.holes.push(hole);
-  }
-  const upper = mesh(rack, new T.ExtrudeGeometry(shape,{depth:.069,bevelEnabled:false,curveSegments:24}), wood,0,.60);
-  upper.rotation.x = -Math.PI/2;
-  mesh(rack,new T.BoxGeometry(2.38,.10,.88),graphite,0,.05);
-  for (const x of [-1.11,1.11]) for (const z of [-.35,.35])
-    mesh(rack,new T.CylinderGeometry(.036,.045,.51,16),graphite,x,.35,z);
-  return rack;
-}
 function makeTube(opts, kind) {
   const tube = makeTestTube({r:tubeRadius,h:1.52}), edge = mat(palette.graphite);
   tube.userData.fullLevel = 1.43;
@@ -157,7 +143,7 @@ function makeBenchSink({ w = 2.1 } = {}) {
   mesh(g, new T.CylinderGeometry(.085, .085, .012, 32), chrome, 0, .03, .1);
   mesh(g, new T.CylinderGeometry(.05, .05, .014, 24), dark, 0, .031, .1);
   // Vòi cổ ngỗng: thân đứng ở góc sau phải, cổ uốn nửa vòng chéo về giữa chậu.
-  const spout = new T.Vector3(0, 1.6, .04), bx = .52, bz = -D/2-.12, H = spout.y+.08;
+  const spout = new T.Vector3(0, 1.6, .04), bx = Math.min(.52, W/2-.3), bz = -D/2-.12, H = spout.y+.08;
   const ux = spout.x-bx, uz = spout.z-bz, L = Math.hypot(ux, uz), R = L/2, Ry = .3, pts = [];
   [.05, .45, .9, 1.3, H-.06].forEach(y => pts.push(new T.Vector3(bx, y, bz)));
   for (let i = 0; i <= 10; i++) { const a = Math.PI*i/10, k = (R-R*Math.cos(a))/L; pts.push(new T.Vector3(bx+ux*k, H+Ry*Math.sin(a), bz+uz*k)); }
@@ -184,30 +170,66 @@ function makeBenchSink({ w = 2.1 } = {}) {
   g.userData = { spout, top: H+Ry, setFlow: on => { flow.visible = !!on; } };
   return g;
 }
-// GIÁ ĐỂ LỌ (27/11, chủ: "sao kiểu để bày bừa các lọ các chai- sao b k làm cái giá để đồ-sắp xếp gọn gàng chuẩn chỉnh"): giá nâng ở mép sau bàn,
-// ngay sau giá ống nghiệm, như kệ hoá chất của bàn thí nghiệm thật. Ba ô bên trái cho dung dịch mẫu, ba ô bên phải cho thuốc thử; lọ nào dùng xong về đúng ô đó.
-// Mặt giá cao hơn mặt bàn để nhìn từ góc chuẩn các lọ nằm phía trên dãy ống nghiệm, không bị ống che nhãn.
-const SHELF = { x: -1.0, z: -1.38, w: 4.34, d: .74, h: .92 };
-const SLOT_X = [-2.72, -2.08, -1.44, -.56, .08, .72]; // toạ độ bàn: 3 ô mẫu · khoảng hở giữa hai nhóm · 3 ô thuốc thử
-const SHELF_SLOT = { cl: { bBr: 0, bI: 0, dW: 1, dCl: 3, dS: 4, dBr: 5 }, bri: { bKI: 0, bNaBr: 0, bNaCl: 1, dW: 2, dBr: 3, dI: 3 } };
-function shelfLabel() {
-  const c = document.createElement('canvas'); c.width = 2048; c.height = 112;
-  const x = c.getContext('2d'); x.fillStyle = palette.graphite; x.fillRect(0, 0, c.width, c.height);
-  x.fillStyle = '#e8f1f0'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '600 58px "IBM Plex Sans", "Segoe UI", Arial, sans-serif';
-  // Chữ đứng ở hai đầu giá, ngoài bề ngang dãy ống nghiệm (ống ở x −1,94 … −0,06 của bàn): nhìn toàn bàn không bị ống che
-  x.textAlign = 'left'; x.fillText('DUNG DỊCH MẪU', 40, 60); x.textAlign = 'right'; x.fillText('THUỐC THỬ', c.width - 40, 60);
-  const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; t.anisotropy = 8;
-  return new T.MeshBasicMaterial({ map: t, toneMapped: false });
+// BỐ CỤC BÀN ỐNG NGHIỆM theo ảnh của chủ (define mục 21.2 · 27/11): một hàng ngang nhìn gần như thẳng từ trước.
+// Trái: KHAY MẪU rồi KHAY THUỐC THỬ (hai khay nông tách nhau) · giữa: ĐẾ ỐNG xám, bảng tên từng ống ở mặt trước đế · phải: cốc thải, bình tia, chậu rửa.
+// Mỗi bước một cách xếp (số lọ, số ống khác nhau): S = lọ ở khay mẫu, R = lọ ở khay thuốc thử, T = ống trên đế kèm chữ ở bảng tên.
+// Khoá là chỉ số bước của bài (0 = bước 1); 'macdinh' dùng khi bàn hiện ở toàn cảnh. Bước 5, 6: ống so màu đứng GIỮA, sát cả hai ống thử.
+const LAYOUT = {
+  cl: {
+    2: { S: ['bBr', 'dW'], R: ['dCl'], T: [['tRef', 'Đối chứng'], ['tBr', 'Thí nghiệm']] },
+    3: { S: ['bI', 'dW'], R: ['dCl', 'dS'], T: [['tRef', 'Đối chứng'], ['tI', 'Thí nghiệm']] },
+    8: { S: [], R: ['dCl', 'dS', 'dBr'], T: [['tRef', 'Ống A'], ['tBr', 'Ống B'], ['tI', 'Ống C']] },
+    macdinh: { S: ['bBr', 'dW'], R: ['dCl', 'dS'], T: [['tRef', 'Đối chứng'], ['tBr', 'Thí nghiệm'], ['tI', 'Thí nghiệm']] },
+  },
+  bri: {
+    4: { S: ['bKI', 'bNaCl', 'dW'], R: ['dBr'], T: [['t1', 'Ống 1'], ['tW', 'So màu'], ['t2', 'Ống 2']] },
+    5: { S: ['bNaBr', 'bNaCl', 'dW'], R: ['dI'], T: [['t3', 'Ống 3'], ['tW', 'So màu'], ['t4', 'Ống 4']] },
+    macdinh: { S: ['dW'], R: ['dBr', 'dI'], T: [['t1', 'Ống 1'], ['t2', 'Ống 2'], ['tW', 'So màu'], ['t3', 'Ống 3'], ['t4', 'Ống 4']] },
+  },
+};
+const B_PITCH = .57, T_PITCH = .86, STAND_X = -.05, TRAY_Y = .03; // khoảng cách hai lọ trong khay · hai ống trên đế · tâm đế · đáy lòng khay
+const trayW = n => (n - 1) * B_PITCH + .72, standW = n => (n - 1) * T_PITCH + .64;
+// Từ một cách xếp ra toạ độ từng món: đế đứng ở tâm bàn, hai khay xếp sát về bên trái đế.
+function arrange(cfg) {
+  const pos = {}, nT = cfg.T.length, sw = standW(nT) + .36;
+  cfg.T.forEach(([id], i) => { pos[id] = [STAND_X + (i - (nT - 1) / 2) * T_PITCH, .1, 0]; });
+  let x = STAND_X - sw / 2 - .3; const trays = [];
+  for (const ids of [cfg.R, cfg.S]) { if (!ids.length) continue; const w = trayW(ids.length), c = x - w / 2;
+    ids.forEach((id, i) => { pos[id] = [c + (i - (ids.length - 1) / 2) * B_PITCH, TRAY_Y, 0]; }); trays.push({ x: c, n: ids.length }); x -= w + .14; }
+  return { pos, trays, stand: { n: nT, labels: cfg.T.map(t => t[1]) } };
 }
-function makeReagentShelf() {
-  const g = new T.Group(), { w, d, h } = SHELF, frame = mat(palette.graphite), top = mat('#e3eaea', { roughness: .4 }), mark = new T.MeshBasicMaterial({ color: '#9fb2b6' });
-  mesh(g, new T.BoxGeometry(w, .06, d), top, 0, h - .03, 0);
-  mesh(g, new T.BoxGeometry(w, .045, .035), frame, 0, h + .022, d / 2 - .018); // gờ trước: lọ không trượt khỏi giá
-  mesh(g, new T.BoxGeometry(w, .2, .035), frame, 0, h + .1, -d / 2 + .018);     // thành sau
-  for (const x of [-w / 2 + .03, 0, w / 2 - .03]) mesh(g, new T.BoxGeometry(.06, h - .06, d - (x ? 0 : .12)), frame, x, (h - .06) / 2, 0);
-  const strip = mesh(g, new T.PlaneGeometry(w - .12, .2), shelfLabel(), 0, h - .16, d / 2 + .004); strip.castShadow = false;
-  for (const x of SLOT_X) { const r = mesh(g, new T.RingGeometry(.262, .285, 40), mark, x - SHELF.x, h + .002, 0); r.rotation.x = -Math.PI / 2; r.castShadow = false; }
-  g.userData = { top: h };
+const cfgOf = (B) => { const L = LAYOUT[B.id]; return L[B.opts.step] ? B.opts.step : 'macdinh'; };
+function plate(text) {
+  const c = document.createElement('canvas'); c.width = 384; c.height = 104; const x = c.getContext('2d');
+  x.fillStyle = '#f4efe2'; x.beginPath(); x.roundRect(0, 0, 384, 104, 22); x.fill();
+  x.fillStyle = palette.graphite; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '600 54px "IBM Plex Sans", "Segoe UI", Arial, sans-serif'; x.fillText(text, 192, 56, 350);
+  const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; t.anisotropy = 8;
+  return new T.MeshBasicMaterial({ map: t, toneMapped: false, transparent: true });
+}
+// Đế ống xám: thanh trên có lỗ đỡ ống, hai má, chân đế; mặt trước chân đế nghiêng, gắn bảng tên từng ống.
+function makeTubeStand({ n, labels }) {
+  const g = new T.Group(), grey = mat('#7a8691', { roughness: .6 }), w = standW(n), xs = labels.map((_, i) => (i - (n - 1) / 2) * T_PITCH);
+  const shape = new T.Shape(), hw = w / 2, hd = .27, r = .08;
+  shape.moveTo(-hw + r, -hd); shape.lineTo(hw - r, -hd); shape.quadraticCurveTo(hw, -hd, hw, -hd + r); shape.lineTo(hw, hd - r); shape.quadraticCurveTo(hw, hd, hw - r, hd);
+  shape.lineTo(-hw + r, hd); shape.quadraticCurveTo(-hw, hd, -hw, hd - r); shape.lineTo(-hw, -hd + r); shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+  for (const x of xs) { const hole = new T.Path(); hole.absarc(x, 0, tubeRadius + .03, 0, Math.PI * 2, true); shape.holes.push(hole); }
+  const beam = mesh(g, new T.ExtrudeGeometry(shape, { depth: .1, bevelEnabled: false, curveSegments: 24 }), grey, 0, .62, 0); beam.rotation.x = -Math.PI / 2;
+  for (const s of [-1, 1]) { const leg = mesh(g, new T.BoxGeometry(.14, .6, .54), grey, s * (hw + .05), .34, 0); leg.rotation.z = s * .2; }
+  mesh(g, new T.BoxGeometry(w + .4, .09, .66), grey, 0, .045, 0);
+  const apron = mesh(g, new T.BoxGeometry(w + .4, .28, .06), grey, 0, .105, .39); apron.rotation.x = -.62;
+  xs.forEach((x, i) => { const p = mesh(g, new T.PlaneGeometry(Math.min(.7, T_PITCH - .1), .19), plate(labels[i]), x, .11, .428); p.rotation.x = -.62; p.castShadow = false; p.renderOrder = 2; });
+  g.userData = { top: .72 };
+  return g;
+}
+// Khay nông bo góc: mỗi lọ một chỗ, khay mẫu tách khỏi khay thuốc thử.
+function makeTray({ n }) {
+  const g = new T.Group(), w = trayW(n), d = .78, wall = .06, grey = mat('#9da8b1', { roughness: .55 });
+  const rr = (S, w, d, r) => { const x = -w / 2, y = -d / 2; S.moveTo(x + r, y); S.lineTo(x + w - r, y); S.quadraticCurveTo(x + w, y, x + w, y + r); S.lineTo(x + w, y + d - r); S.quadraticCurveTo(x + w, y + d, x + w - r, y + d);
+    S.lineTo(x + r, y + d); S.quadraticCurveTo(x, y + d, x, y + d - r); S.lineTo(x, y + r); S.quadraticCurveTo(x, y, x + r, y); return S; };
+  const ring = rr(new T.Shape(), w, d, .13); ring.holes.push(rr(new T.Path(), w - 2 * wall, d - 2 * wall, .09));
+  const body = new T.ExtrudeGeometry(ring, { depth: .1, bevelEnabled: true, bevelThickness: .012, bevelSize: .012, bevelSegments: 2, curveSegments: 8 }); body.rotateX(-Math.PI / 2); mesh(g, body, grey, 0, .012, 0);
+  const floor = new T.ShapeGeometry(rr(new T.Shape(), w - 2 * wall + .02, d - 2 * wall + .02, .09), 8); floor.rotateX(-Math.PI / 2); mesh(g, floor, mat('#b3bdc5', { roughness: .6 }), 0, TRAY_Y - .004, 0);
+  g.userData = { top: .13 };
   return g;
 }
 function makeWasteCup({h}) {
@@ -240,19 +262,24 @@ export function benchDeclaration(decl) {
       };
     }
     if (b.id !== 'cl' && b.id !== 'bri') return b;
-    const rackX = b.items.find(it=>it.kind === 'rack').at[0], slot = SHELF_SLOT[b.id] || {};
-    const shelf = { id: 'giaLo', kind: 'shelf', at: [SHELF.x, SHELF.z], make3d: makeReagentShelf, opts: {} };
-    return { ...b, view: {...b.view, swing: 75, elMin: 6, elMax: 60, el: 23}, top: 0x697f86, backdrop: 0xe2e9e8, nativeGlass: true, items: [shelf, ...b.items].map(it => {
-      if (it.kind === 'sink') return {...it, opts:{...it.opts, photo:false}, make3d:makeBenchSink, tagAt:[.26,2.14,-.3]};
-      if (it.id === 'waste') return {...it, at:[.72,.5], make3d:makeWasteCup}; // cốc thải và bình tia gom về phía chậu rửa, vùng trước giá ống để trống cho thao tác
-      if (it.id === 'wash') return {...it, at:[1.85,-1.25]};
-      if (it.kind === 'rack') return {...it, make3d:makeRack, opts:{}};
-      if (it.kind === 'dropper' && it.opts?.pip) return {...it, make3d:makeBenchBottle, tagAt:[0,1.33,0], ...(it.id in slot ? { at:[SLOT_X[slot[it.id]], SHELF.h, SHELF.z], ringY: SHELF.h + .02 } : {})};
-      if (it.kind === 'bottle' && /^r(Cl|Br|I)$/.test(it.id)) return {...it, make3d:makeRankBottle, tagAt:[0,.98,0]};
-      if (it.kind === 'tube') {
-        const [x,y,z] = it.at;
-        return {...it, make3d:makeTube, at:[rackX+Math.round((x-rackX)/.32)*pitch,y,z]};
-      }
+    // Bàn ống nghiệm: bố cục theo ảnh của chủ (xem LAYOUT). Vị trí từng món do atBy trả theo bước; đế và khay mỗi cách xếp một bộ, bước nào hiện bộ đó.
+    const L = LAYOUT[b.id], keys = Object.keys(L), plan = Object.fromEntries(keys.map(k => [k, arrange(L[k])]));
+    const atBy = id => B => plan[cfgOf(B)].pos[id] || null, first = id => plan.macdinh.pos[id] || Object.values(plan).map(p => p.pos[id]).find(Boolean);
+    const sets = keys.flatMap(k => [
+      { id: 'de_' + k, kind: 'rack', at: [STAND_X, 0], opts: {}, make3d: () => makeTubeStand(plan[k].stand), show: B => String(cfgOf(B)) === k },
+      ...plan[k].trays.map((t, n) => ({ id: `khay_${k}_${n}`, kind: 'shelf', at: [t.x, 0], opts: {}, make3d: () => makeTray(t), show: B => String(cfgOf(B)) === k })),
+    ]);
+    const RANK_X = 3.2, RANK_Z = 2.0; // bước 6: ba lọ xếp hạng và kệ xếp hạng ở dải bàn phía trước chậu rửa, không che ống và khay
+    return { ...b, w: 9.2, view: {...b.view, target: [b.view.target[0], 1.3, .2], h: 2.5, swing: 75, elMin: 5, elMax: 60, el: 13, az: 0}, top: 0x697f86, backdrop: 0xe2e9e8, nativeGlass: true,
+      steps: b.steps.map(s => /^rank[123]$/.test(s.id) ? {...s, slot: [RANK_X + (+s.id.slice(4) - 2) * .7, RANK_Z]} : s),
+      items: [...sets, ...b.items.filter(it => it.kind !== 'rack')].map(it => {
+      if (it.kind === 'sink') return {...it, at:[3.2,.45], opts:{...it.opts, photo:false, w:1.56}, make3d:makeBenchSink, tagAt:[.26,2.14,-.3]};
+      if (it.id === 'waste') return {...it, at:[1.6,.72], make3d:makeWasteCup}; // cốc thải (trước) và bình tia (sau) gom sát chậu rửa
+      if (it.id === 'wash') return {...it, at:[2.14,-.62]};
+      if (it.id === 'shelf') return {...it, at:[RANK_X, RANK_Z]};
+      if (it.kind === 'dropper' && it.opts?.pip) return {...it, make3d:makeBenchBottle, tagAt:[0,1.33,0], at: first(it.id) || it.at, atBy: atBy(it.id), ringY: TRAY_Y + .012};
+      if (it.kind === 'bottle' && /^r(Cl|Br|I)$/.test(it.id)) return {...it, at:[RANK_X + ({ rCl: -1, rBr: 0, rI: 1 })[it.id] * .7, 1.38], make3d:makeRankBottle, tagAt:[0,.98,0]};
+      if (it.kind === 'tube') return {...it, make3d:makeTube, at: first(it.id) || it.at, atBy: atBy(it.id)};
       return it;
     }) };
   }) };

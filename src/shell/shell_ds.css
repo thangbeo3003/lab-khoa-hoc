@@ -587,3 +587,26 @@ dialog.hg-compare.hg-dock { position:absolute; inset:auto 12px 10px 12px; width:
 .hg-p3.is-tight .hg-p3-note { display:none; }
 .hg-p3.is-tight .hg-p3-cap { position:absolute; z-index:2; left:6px; right:6px; bottom:6px; margin:0; min-height:0; padding:4px 8px; border-radius:8px; background:#0b1322e0; color:#e8f1f0; font-size:11.5px; line-height:16px; pointer-events:none; }
 .hg-p3.is-tight .hg-p3-phen { display:none; }
+
+/* Màn hẹp, bài có bàn ống nghiệm (define 21.1 mục S1 · 27/11): cảnh cao hơn và thẻ phương trình gọn một cụm, để dãy dụng cụ to lên */
+@media (max-width:899px) {
+  .ds.is-v3 .lk-main:has(.hg-card) .lk-stage { flex-basis:50vh; flex-basis:50dvh; }
+  .ds.is-v3 .lk-stage.has-modes .lk-eqcard.is-bottom { padding:4px 12px 5px; gap:1px; }
+  .ds.is-v3 .lk-stage.has-modes .lk-eqcard.is-bottom small { display:none; }
+  .ds.is-v3 .lk-stage.has-modes .lk-eqcard.is-bottom b { font-size:13px; line-height:18px; }
+}
+
+/* Chế độ Thực tế, define 21.1 mục S3, S4 (27/11): thẻ trái và bảng phải không phải cuộn ở 1440×900 */
+.lk .lk-ideas .tt-src { display:inline-flex; min-height:0; height:22px; margin:0 0 0 4px; padding:0 9px; font-size:11.5px; vertical-align:baseline; }
+.tt-more { margin:2px 0 6px; } .tt-more .lk-msg { margin-top:4px; }
+.lk-box.tt-qfold { display:flex; width:100%; align-items:center; justify-content:space-between; gap:10px; padding:7px 12px; font:inherit; font-size:12.5px; line-height:17px; text-align:left; color:var(--text, #090a2b); cursor:pointer; }
+.lk-box.tt-qfold span { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.lk-box.tt-qfold em { flex:none; font-style:normal; font-weight:600; color:var(--accent-hover, #4d3fdc); }
+.lk-box.tt-qfold:hover { border-color:var(--accent, #6254f4); }
+.tt-compact .lk-sub { margin:9px 0 4px; }
+.tt-compact .lk-seg button { min-height:32px; padding:5px 4px; }
+.tt-compact .lk-vcards { margin-bottom:2px; }
+.tt-list .lk-proc { gap:5px; } .is-full .tt-list .lk-pstep { padding:5px 8px; align-items:center; } .ds .tt-list .lk-pstep .lk-btn { min-height:32px; padding:4px 12px; }
+.tt-list .lk-box .lk-ideas li { font-size:12.5px; line-height:17px; margin-bottom:3px; }
+.is-full .hg-compact .lk-pstep.is-done:not(.is-next) .lk-pb { flex:1 1 0; min-width:0; }
+.is-full .hg-compact .lk-pstep.is-done:not(.is-next) .lk-seg { max-width:100%; box-sizing:border-box; }
