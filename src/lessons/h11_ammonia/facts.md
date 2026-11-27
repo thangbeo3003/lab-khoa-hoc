@@ -57,3 +57,16 @@ STEMLabs chỉ ghi một câu: "Lớp vi mô: phân tử N₂ và H₂ hấp ph�
 - Trang nguồn ghi thêm: bước chậm là do hệ số trước hàm mũ bất lợi chứ không chủ yếu do năng lượng hoạt hoá. Bài chỉ nói "bước chậm nhất", không đi vào ý này.
 - Câu "sắt còn nguyên sau mỗi vòng" và "chiều ngược cũng xảy ra trên chính bề mặt này" là kiến thức chung về xúc tác (xúc tác không bị tiêu hao, tăng tốc cả hai chiều); trang nguồn không ghi rõ hai câu đó. Cần giáo viên duyệt.
 
+## 6. Mode Thực tế "Một ngày ở Đạm Phú Mỹ" (27/11, `thuc_te.js`): số liệu đã tự mở nguồn kiểm lại
+
+| # | Dữ kiện | Nguồn (đọc 27/11) | Ghi chú |
+|---|---|---|---|
+| T1 | Công suất 800.000 tấn urê/năm, 540.000 tấn NH₃/năm; nhà máy ở Khu công nghiệp Phú Mỹ 1, Bà Rịa – Vũng Tàu; vận hành năm 2004; công nghệ NH₃ của Haldor Topsoe | dpm.vn, Báo cáo thường niên 2024, mục Giới thiệu Tổng công ty | có nguồn (nguồn chính thức của doanh nghiệp) |
+| T2 | Năm 2010 nâng urê từ 740.000 lên 800.000 tấn/năm; năm 2018 mở rộng phân xưởng NH₃ thêm 90.000 tấn/năm (tăng 20 %) | dpm.vn, Lịch sử phát triển | Trang này không ghi tổng NH₃; báo cáo 2024 vẫn ghi 540.000. Bài dùng 540.000 theo báo cáo 2024 và theo STEMLabs. Cần hỏi lại nếu muốn dùng số sau mở rộng |
+| T3 | Mỗi lượt qua tháp khoảng 15 %; cuối cùng chuyển hoá khoảng 97 % (một chú thích trên cùng trang ghi khoảng 98 %); áp suất 150–250 bar | Wikipedia "Haber process" | có nguồn |
+| T4 | 400–450 °C, 150–200 bar, xúc tác Fe | như H1, H2 (SGK qua VietJack) | nguồn thứ cấp |
+
+Đáp số câu tính (tự tính lại 27/11, khớp đáp số đã kiểm của STEMLabs): NH₃ cho 800.000 t urea = 800.000 × 34,06 ÷ 60,06 ≈ 453.680 (STEMLabs làm tròn 453.700) · dư ≈ 86.300 · H₂ ≈ 95.900 · N₂ ≈ 444.100 · 1 ÷ 0,15 ≈ 6,7 lượt · 540.000 ÷ 365 ≈ 1.479 t/ngày. Ô đáp số nhận sai lệch ± 1.500 tấn.
+
+Điều kiện hoàn thành phần ca trực (theo STEMLabs): lần 3 đạt ít nhất 1.479 t/ngày bằng cấu hình 400–500 °C, có tách NH₃ và tuần hoàn, và chọn đúng lời giải thích về sự đánh đổi cân bằng và tốc độ. Sản lượng, chi phí là mô hình nội bộ (mục 3).
+
